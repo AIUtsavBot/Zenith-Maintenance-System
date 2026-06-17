@@ -10,9 +10,10 @@
     }
   ],
   "routes": [
+    { "handle": "filesystem" },
     {
       "src": "/(.*)",
-      "dest": "client/dist/$1"
+      "dest": "/index.html"
     }
   ]
 }

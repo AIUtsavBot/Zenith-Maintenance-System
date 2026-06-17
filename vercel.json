@@ -11,12 +11,15 @@
   ],
   "routes": [
     {
-      "src": "/assets/(.*)",
-      "dest": "/client/dist/assets/$1"
+      "src": "/api/(.*)",
+      "dest": "https://zenith-maintenance-system.onrender.com/api/$1"
+    },
+    {
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "/client/dist/index.html"
+      "dest": "/index.html"
     }
   ]
 }

@@ -10,10 +10,13 @@
     }
   ],
   "routes": [
-    { "handle": "filesystem" },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/client/dist/assets/$1"
+    },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/client/dist/index.html"
     }
   ]
 }

@@ -1,0 +1,29 @@
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Production builds
+dist/
+**/dist/
+
+# Environment files (contains API keys, passwords, credentials)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# Local Database & persistent data fallbacks
+server/data/
+**/data/
+*.json.bak
+db.json
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.gemini/
+.system_generated/
+*.log

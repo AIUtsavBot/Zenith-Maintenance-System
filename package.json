@@ -1,0 +1,22 @@
+{
+  "name": "office-hours-tracker",
+  "version": "1.0.0",
+  "description": "Personal Office Hours and Productivity Tracking Web Application",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client --legacy-peer-deps",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build:server && npm run build:client",
+    "start": "npm start --prefix server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

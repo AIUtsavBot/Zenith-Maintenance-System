@@ -16,10 +16,24 @@ const DEFAULT_USER_PASSWORD = process.env.USER_PASSWORD || 'user123';
 // Seeding function to ensure default accounts exist on first start
 async function seedDefaultUsers() {
   const users = getAllUsers();
-  if (users.length === 0) {
-    const salt = await bcrypt.genSalt(10);
-    
-    // Seed default admin
+  const salt = await bcrypt.genSalt(10);
+
+  // 1. Seed 'utsav' admin
+  const utsav = users.find(u => u.username.toLowerCase() === 'utsav');
+  if (!utsav) {
+    const adminHash = await bcrypt.hash(DEFAULT_PASSWORD, salt);
+    await saveUser('utsav', {
+      username: 'utsav',
+      passwordHash: adminHash,
+      role: 'admin',
+      name: 'Utsav'
+    });
+    console.log("Seeded default admin user: utsav");
+  }
+  
+  // 2. Seed default admin (backward compatibility fallback)
+  const admin = users.find(u => u.username.toLowerCase() === 'admin');
+  if (!admin) {
     const adminHash = await bcrypt.hash(DEFAULT_PASSWORD, salt);
     await saveUser('admin', {
       username: 'admin',
@@ -27,8 +41,12 @@ async function seedDefaultUsers() {
       role: 'admin',
       name: 'Administrator'
     });
-    
-    // Seed default user
+    console.log("Seeded legacy admin user: admin");
+  }
+  
+  // 3. Seed default user
+  const defaultUser = users.find(u => u.username.toLowerCase() === 'user');
+  if (!defaultUser) {
     const userHash = await bcrypt.hash(DEFAULT_USER_PASSWORD, salt);
     await saveUser('user', {
       username: 'user',
@@ -36,6 +54,7 @@ async function seedDefaultUsers() {
       role: 'user',
       name: 'Office Member'
     });
+    console.log("Seeded default user account");
   }
 }
 

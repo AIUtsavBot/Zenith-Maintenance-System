@@ -17,10 +17,10 @@ function getLocalDateString(offsetDays = 0): string {
 export async function getProductivityData(req: AuthenticatedRequest, res: Response) {
   const { date } = req.query;
   const targetDate = (date as string) || getLocalDateString();
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
 
   try {
-    let session = await getSession(role, targetDate);
+    let session = await getSession(username, targetDate);
     
     if (!session) {
       // Return empty structures if offline/not created
@@ -51,10 +51,10 @@ export async function getProductivityData(req: AuthenticatedRequest, res: Respon
 export async function updateProductivityData(req: AuthenticatedRequest, res: Response) {
   const { date, notes, rating, completedTasks, goals } = req.body;
   const targetDate = date || getLocalDateString();
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
 
   try {
-    let session = await getSession(role, targetDate);
+    let session = await getSession(username, targetDate);
 
     if (!session) {
       // Create an offline shell session to hold the notes/rating
@@ -79,7 +79,7 @@ export async function updateProductivityData(req: AuthenticatedRequest, res: Res
     if (completedTasks !== undefined) session.completedTasks = completedTasks;
     if (goals !== undefined) session.goals = goals;
 
-    const saved = await saveSession(role, targetDate, session);
+    const saved = await saveSession(username, targetDate, session);
     return res.json({ message: 'Productivity notes saved successfully', session: saved });
   } catch (error) {
     console.error('Update productivity data error:', error);
@@ -91,10 +91,10 @@ export async function updateProductivityData(req: AuthenticatedRequest, res: Res
 export async function getPlannerData(req: AuthenticatedRequest, res: Response) {
   const { date } = req.params;
   const targetDate = date || getLocalDateString();
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
 
   try {
-    let planner = await getPlanner(role, targetDate);
+    let planner = await getPlanner(username, targetDate);
     
     if (!planner) {
       planner = {
@@ -118,10 +118,10 @@ export async function updatePlannerData(req: AuthenticatedRequest, res: Response
   const { date } = req.params;
   const { goals, priorities, checklist, reminders } = req.body;
   const targetDate = date || getLocalDateString();
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
 
   try {
-    let planner = await getPlanner(role, targetDate);
+    let planner = await getPlanner(username, targetDate);
 
     if (!planner) {
       planner = {
@@ -138,7 +138,7 @@ export async function updatePlannerData(req: AuthenticatedRequest, res: Response
     if (checklist !== undefined) planner.checklist = checklist;
     if (reminders !== undefined) planner.reminders = reminders;
 
-    const saved = await savePlanner(role, targetDate, planner);
+    const saved = await savePlanner(username, targetDate, planner);
     return res.json({ message: 'Planner items saved', planner: saved });
   } catch (error) {
     console.error('Update planner error:', error);
@@ -148,9 +148,9 @@ export async function updatePlannerData(req: AuthenticatedRequest, res: Response
 
 // Get all session history for Calendar and Charts
 export async function getHistory(req: AuthenticatedRequest, res: Response) {
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
   try {
-    const sessions = getAllSessions(role);
+    const sessions = getAllSessions(username);
     // Sort in ascending order for historical trends
     const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
     return res.json(sorted);
@@ -162,10 +162,10 @@ export async function getHistory(req: AuthenticatedRequest, res: Response) {
 
 // Get aggregated dashboard stats
 export async function getDashboardSummary(req: AuthenticatedRequest, res: Response) {
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
   try {
     const today = getLocalDateString();
-    const sessions = getAllSessions(role);
+    const sessions = getAllSessions(username);
 
     // 1. Today's stats
     const todaySession = sessions.find(s => s.date === today);

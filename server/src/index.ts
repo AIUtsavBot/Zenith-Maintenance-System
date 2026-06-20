@@ -4,7 +4,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { initDb, isSupabaseConfigured, restoreFromSupabaseIfEmpty, retryUnsyncedData } from './config/db.js';
 import { authenticateToken, requireAdmin } from './middlewares/authMiddleware.js';
-import { login, changePassword, validateToken } from './controllers/authController.js';
+import { login, changePassword, validateToken, signup, googleLogin, listUsers, adminCreateUser } from './controllers/authController.js';
 import {
   getCurrentSession,
   startWork,
@@ -52,9 +52,15 @@ app.get('/health', (req, res) => {
 });
 
 // Authentication Routes
+app.post('/api/auth/signup', signup);
 app.post('/api/auth/login', login);
+app.post('/api/auth/google', googleLogin);
 app.post('/api/auth/change-password', authenticateToken, changePassword);
 app.get('/api/auth/validate', authenticateToken, validateToken);
+
+// User Management (Admin-only)
+app.get('/api/admin/users', authenticateToken, requireAdmin, listUsers);
+app.post('/api/admin/users', authenticateToken, requireAdmin, adminCreateUser);
 
 // Work Session Tracking Routes
 app.get('/api/session/current', authenticateToken, getCurrentSession);

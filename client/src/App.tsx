@@ -10,7 +10,7 @@ import { api, getToken, removeToken } from './api.js';
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [role, setRole] = useState<'admin' | 'user' | null>(null);
+  const [user, setUser] = useState<{ username: string; role: 'admin' | 'user'; name?: string } | null>(null);
   const [currentTab, setCurrentTab] = useState<string>('tracker');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
@@ -31,12 +31,16 @@ export const App: React.FC = () => {
       try {
         const response = await api.auth.validate();
         setIsAuthenticated(true);
-        setRole(response.role || 'user');
+        setUser({
+          username: response.username,
+          role: response.role,
+          name: response.name
+        });
         await refreshSession();
       } catch (err) {
         removeToken();
         setIsAuthenticated(false);
-        setRole(null);
+        setUser(null);
       }
     };
     checkAuth();
@@ -70,9 +74,9 @@ export const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  const handleLoginSuccess = (userRole: 'admin' | 'user') => {
+  const handleLoginSuccess = (userData: { username: string; role: 'admin' | 'user'; name?: string }) => {
     setIsAuthenticated(true);
-    setRole(userRole);
+    setUser(userData);
   };
 
   const handleLogoutClick = () => {
@@ -85,7 +89,7 @@ export const App: React.FC = () => {
     setIsAuthenticated(false);
     setSession(null);
     setStatus('Offline');
-    setRole(null);
+    setUser(null);
   };
 
   if (isAuthenticated === null) {
@@ -122,7 +126,7 @@ export const App: React.FC = () => {
       case 'planner':
         return <Planner />;
       case 'settings':
-        return <Settings theme={theme} setTheme={setTheme} role={role} />;
+        return <Settings theme={theme} setTheme={setTheme} role={user?.role || null} />;
       default:
         return (
           <Tracker
@@ -145,7 +149,8 @@ export const App: React.FC = () => {
         theme={theme}
         setTheme={setTheme}
         onLogout={handleLogoutClick}
-        role={role}
+        role={user?.role || null}
+        name={user?.name || ''}
       />
       <main className="main-content">
         {renderTabContent()}

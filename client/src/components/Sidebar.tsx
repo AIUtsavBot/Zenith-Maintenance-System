@@ -18,6 +18,7 @@ interface SidebarProps {
   setTheme: (theme: 'dark' | 'light') => void;
   onLogout: () => void;
   role: 'admin' | 'user' | null;
+  name: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,7 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme,
   setTheme,
   onLogout,
-  role
+  role,
+  name
 }) => {
   const navItems = [
     { id: 'tracker', label: 'Time Tracker', icon: Clock },
@@ -174,8 +176,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
+        {/* User profile card */}
+        {name && (
+          <div 
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border-glass)',
+              background: 'rgba(255, 255, 255, 0.02)',
+              marginBottom: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}
+          >
+            <div 
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'var(--accent-gradient)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                color: 'white',
+                flexShrink: 0
+              }}
+            >
+              {name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Logged In</div>
+            </div>
+          </div>
+        )}
+
         {/* Footer Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: name ? '0' : 'auto' }}>
           <button
             onClick={toggleTheme}
             style={{

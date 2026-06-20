@@ -1,17 +1,63 @@
-import React, { useState } from 'react';
-import { Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, ArrowRight, Eye, EyeOff, User } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard.js';
 import { api, setToken } from '../api.js';
 
 interface LoginProps {
-  onLoginSuccess: (role: 'admin' | 'user') => void;
+  onLoginSuccess: (user: { username: string; role: 'admin' | 'user'; name?: string }) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Initialize Google Identity Sign-In
+  useEffect(() => {
+    const initGoogleSSO = () => {
+      if (typeof window !== 'undefined' && (window as any).google) {
+        try {
+          (window as any).google.accounts.id.initialize({
+            // Default Client ID for local development and testing
+            client_id: "870634691458-45tfhpeocofmgeflmfeecbcr2eop5109.apps.googleusercontent.com",
+            callback: handleGoogleCredentialResponse
+          });
+          (window as any).google.accounts.id.renderButton(
+            document.getElementById("google-signin-btn"),
+            { theme: "outline", size: "large", width: 376 }
+          );
+        } catch (err) {
+          console.error("Google SSO initialization error:", err);
+        }
+      }
+    };
+
+    // Give a short delay for script to fully register on window if load is fast
+    const timer = setTimeout(initGoogleSSO, 100);
+    return () => clearTimeout(timer);
+  }, [isSignUp]);
+
+  const handleGoogleCredentialResponse = async (response: any) => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await api.auth.googleLogin(response.credential);
+      setToken(data.token);
+      onLoginSuccess({
+        username: data.username,
+        role: data.role,
+        name: data.name
+      });
+    } catch (err: any) {
+      setError(err.message || 'Google authentication failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,16 +65,36 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setError('Please enter your access password.');
       return;
     }
+    if (isSignUp && !username) {
+      setError('Please enter a username or email.');
+      return;
+    }
 
     setError('');
     setLoading(true);
 
     try {
-      const data = await api.auth.login(password);
-      setToken(data.token);
-      onLoginSuccess(data.role || 'user');
+      if (isSignUp) {
+        // Signups default to 'user' role
+        const data = await api.auth.signup({ username, name, password });
+        setToken(data.token);
+        onLoginSuccess({
+          username: data.username,
+          role: data.role,
+          name: data.name
+        });
+      } else {
+        // Supports legacy (only password) or multi-user (username and password) login
+        const data = await api.auth.login({ username: username || undefined, password });
+        setToken(data.token);
+        onLoginSuccess({
+          username: data.username,
+          role: data.role,
+          name: data.name
+        });
+      }
     } catch (err: any) {
-      setError(err.message || 'Incorrect password. Access Denied.');
+      setError(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
       setLoading(false);
     }
@@ -101,7 +167,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             textAlign: 'center'
           }}
         >
-          Zenith Focus
+          {isSignUp ? 'Join Zenith Focus' : 'Zenith Focus'}
         </h1>
         <p
           style={{
@@ -111,10 +177,92 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             marginBottom: '2rem'
           }}
         >
-          Enter password to access your office session database.
+          {isSignUp 
+            ? 'Create an account to start tracking work hours.' 
+            : 'Enter credentials to access your office session database.'}
         </p>
 
         <form onSubmit={handleSubmit} style={{ width: '100%', zIndex: 1 }}>
+          
+          {/* Username / Email field */}
+          {(isSignUp || username !== '') && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="username-input"
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Username or Email
+              </label>
+              <input
+                id="username-input"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username/email..."
+                className="form-input"
+                style={{ width: '100%', fontSize: '1rem' }}
+              />
+            </div>
+          )}
+
+          {/* Legacy single-input helper (only display username field if they choose to use username or sign up) */}
+          {!isSignUp && username === '' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setUsername('admin')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  textDecoration: 'underline'
+                }}
+              >
+                Sign in with Username instead
+              </button>
+            </div>
+          )}
+
+          {/* Full Name field (Signup only) */}
+          {isSignUp && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="name-input"
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Full Name
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="name-input"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="form-input"
+                  style={{ width: '100%', paddingLeft: '2.5rem', fontSize: '1rem' }}
+                />
+                <User size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Password field */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
             <label
               htmlFor="password-input"
@@ -196,11 +344,48 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               gap: '0.5rem'
             }}
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            {loading ? 'Authenticating...' : isSignUp ? 'Create Account' : 'Sign In'}
             {!loading && <ArrowRight size={18} />}
           </button>
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', margin: '1.5rem 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border-glass)' }} />
+            <span style={{ padding: '0 0.75rem', fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', fontWeight: 600 }}>or</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border-glass)' }} />
+          </div>
+
+          {/* Google Sign-In Container */}
+          <div id="google-signin-btn" style={{ width: '100%', display: 'flex', justifyContent: 'center', minHeight: '40px' }} />
+
         </form>
+
+        <p style={{ marginTop: '1.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', zIndex: 1 }}>
+          {isSignUp ? 'Already have an account? ' : 'New to Zenith Focus? '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError('');
+              setUsername('');
+              setName('');
+              setPassword('');
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--accent-primary)',
+              fontWeight: 700,
+              cursor: 'pointer',
+              padding: 0,
+              textDecoration: 'underline'
+            }}
+          >
+            {isSignUp ? 'Sign In' : 'Register Now'}
+          </button>
+        </p>
       </GlassCard>
     </div>
   );
 };
+export default Login;

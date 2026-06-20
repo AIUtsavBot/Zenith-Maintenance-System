@@ -131,10 +131,10 @@ No session data has been logged yet. Start a work session and log your notes/rat
 export async function getAiInsights(req: AuthenticatedRequest, res: Response) {
   const { period } = req.query; // 'daily' | 'weekly'
   const isWeekly = period === 'weekly';
-  const role = req.user?.role || 'admin';
+  const username = req.user?.username || 'admin';
 
   try {
-    const sessions = getAllSessions(role);
+    const sessions = getAllSessions(username);
 
     if (sessions.length === 0) {
       return res.json({
@@ -199,7 +199,7 @@ Do not use placeholders. Give specific feedback based on the numbers. Write in a
   } catch (error) {
     console.error('AI Insights generator error:', error);
     // If Gemini fails, fallback to local heuristics rather than crashing
-    const sessions = getAllSessions(role);
+    const sessions = getAllSessions(username);
     const fallback = generateLocalHeuristics(sessions, isWeekly ? 'weekly' : 'daily');
     return res.json({
       insights: fallback,

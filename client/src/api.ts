@@ -42,9 +42,17 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const api = {
   auth: {
-    login: (password: string) => request('/auth/login', {
+    login: (loginData: { username?: string; password: string }) => request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ password })
+      body: JSON.stringify(loginData)
+    }),
+    signup: (signupData: { username: string; name?: string; password: string }) => request('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(signupData)
+    }),
+    googleLogin: (credential: string) => request('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential })
     }),
     validate: () => request('/auth/validate', { method: 'GET' }),
     changePassword: (passwordData: any) => request('/auth/change-password', {
@@ -81,5 +89,12 @@ export const api = {
   },
   ai: {
     getInsights: (period: 'daily' | 'weekly') => request(`/ai/insights?period=${period}`)
+  },
+  admin: {
+    getUsers: () => request('/admin/users'),
+    createUser: (userData: { username: string; name?: string; password: string; role: 'admin' | 'user' }) => request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(userData)
+    })
   }
 };

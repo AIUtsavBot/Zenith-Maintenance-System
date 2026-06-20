@@ -1,7 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import { ListTodo, CheckSquare, ShieldAlert, Pin, CalendarDays, Plus, Trash } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ListTodo, CheckSquare, ShieldAlert, Pin, CalendarDays, Plus, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard.js';
 import { api } from '../api.js';
+
+// Custom Date Picker Dropdown Component
+interface DatePickerProps {
+  value: string;
+  onChange: (date: string) => void;
+}
+
+const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Parse current value
+  const currentDate = new Date(value + 'T00:00:00');
+  const [viewYear, setViewYear] = useState(currentDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(currentDate.getMonth()); // 0-11
+
+  // Keep view in sync if external value changes
+  useEffect(() => {
+    const cur = new Date(value + 'T00:00:00');
+    if (!isNaN(cur.getTime())) {
+      setViewYear(cur.getFullYear());
+      setViewMonth(cur.getMonth());
+    }
+  }, [value]);
+
+  const formatDisplayDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return dateStr;
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const y = d.getFullYear();
+    return `${m}/${day}/${y}`;
+  };
+
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getStartDayOfMonth = (year: number, month: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const handlePrevMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(prev => prev - 1);
+    } else {
+      setViewMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(prev => prev + 1);
+    } else {
+      setViewMonth(prev => prev + 1);
+    }
+  };
+
+  const handleSelectDay = (day: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const m = String(viewMonth + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    onChange(`${viewYear}-${m}-${d}`);
+    setIsOpen(false);
+  };
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
+  const startDay = getStartDayOfMonth(viewYear, viewMonth);
+
+  const dayCells = [];
+  for (let i = 0; i < startDay; i++) {
+    dayCells.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    dayCells.push(i);
+  }
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          background: 'var(--bg-input)',
+          padding: '0.4rem 0.8rem',
+          borderRadius: '10px',
+          border: '1px solid var(--border-glass)',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-title)',
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          fontSize: '0.9rem',
+          transition: 'all var(--transition-fast)'
+        }}
+        className="glass-panel-hover"
+      >
+        <CalendarDays size={16} style={{ color: 'var(--accent-primary)' }} />
+        <span>{formatDisplayDate(value)}</span>
+      </button>
+
+      {isOpen && (
+        <div
+          className="glass-panel"
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 'calc(100% + 8px)',
+            width: '280px',
+            padding: '1rem',
+            zIndex: 100,
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            background: 'var(--bg-card)',
+            backdropFilter: 'var(--backdrop-blur)'
+          }}
+        >
+          {/* Calendar Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span style={{ fontWeight: 700, fontFamily: 'var(--font-title)', fontSize: '0.95rem' }}>
+              {months[viewMonth]} {viewYear}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* Weekdays */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center' }}>
+            {weekdays.map(day => (
+              <span key={day} style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                {day}
+              </span>
+            ))}
+          </div>
+
+          {/* Day Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+            {dayCells.map((day, idx) => {
+              if (day === null) {
+                return <div key={`empty-${idx}`} />;
+              }
+
+              const m = String(viewMonth + 1).padStart(2, '0');
+              const d = String(day).padStart(2, '0');
+              const isSelected = `${viewYear}-${m}-${d}` === value;
+
+              return (
+                <button
+                  key={`day-${day}`}
+                  type="button"
+                  onClick={(e) => handleSelectDay(day, e)}
+                  style={{
+                    background: isSelected ? 'var(--accent-gradient)' : 'transparent',
+                    border: 'none',
+                    color: isSelected ? 'white' : 'var(--text-primary)',
+                    borderRadius: '8px',
+                    padding: '6px 0',
+                    fontSize: '0.85rem',
+                    fontWeight: isSelected ? 700 : 500,
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)'
+                  }}
+                  className={isSelected ? '' : 'btn-secondary'}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Planner: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -173,25 +406,7 @@ export const Planner: React.FC = () => {
           <span style={{ fontSize: '0.8rem', color: saveStatus === 'saving' ? 'var(--color-break)' : saveStatus === 'error' ? '#ef4444' : 'var(--color-working)' }}>
             {saveStatus === 'saving' ? 'Syncing...' : saveStatus === 'error' ? 'Connection Error' : 'Database Synced'}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-input)', padding: '0.4rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
-            <CalendarDays size={16} style={{ color: 'var(--text-tertiary)' }} />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="form-input"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: '0',
-                fontSize: '0.9rem',
-                fontFamily: 'var(--font-title)',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                outline: 'none'
-              }}
-            />
-          </div>
+          <DatePicker value={selectedDate} onChange={setSelectedDate} />
         </div>
       </div>
 

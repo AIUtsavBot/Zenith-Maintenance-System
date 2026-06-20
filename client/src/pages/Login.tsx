@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, ArrowRight, Eye, EyeOff, User } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard.js';
 import { api, setToken } from '../api.js';
 
@@ -8,7 +8,9 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -29,14 +31,25 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      // Login with credentials
-      const data = await api.auth.login({ username, password });
-      setToken(data.token);
-      onLoginSuccess({
-        username: data.username,
-        role: data.role,
-        name: data.name
-      });
+      if (isSignUp) {
+        // Sign up with credentials
+        const data = await api.auth.signup({ username, name, password });
+        setToken(data.token);
+        onLoginSuccess({
+          username: data.username,
+          role: data.role,
+          name: data.name
+        });
+      } else {
+        // Login with credentials
+        const data = await api.auth.login({ username, password });
+        setToken(data.token);
+        onLoginSuccess({
+          username: data.username,
+          role: data.role,
+          name: data.name
+        });
+      }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
@@ -111,7 +124,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             textAlign: 'center'
           }}
         >
-          Zenith Focus
+          {isSignUp ? 'Join Zenith Focus' : 'Zenith Focus'}
         </h1>
         <p
           style={{
@@ -121,7 +134,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             marginBottom: '2rem'
           }}
         >
-          Enter credentials to access your office session database.
+          {isSignUp 
+            ? 'Create an account to start tracking work hours.' 
+            : 'Enter credentials to access your office session database.'}
         </p>
 
         <form onSubmit={handleSubmit} style={{ width: '100%', zIndex: 1 }}>
@@ -150,6 +165,36 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               style={{ width: '100%', fontSize: '1rem' }}
             />
           </div>
+
+          {/* Full Name field (Signup only) */}
+          {isSignUp && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="name-input"
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Full Name
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="name-input"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="form-input"
+                  style={{ width: '100%', paddingLeft: '2.5rem', fontSize: '1rem' }}
+                />
+                <User size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+              </div>
+            </div>
+          )}
 
           {/* Password field */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
@@ -233,11 +278,36 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               gap: '0.5rem'
             }}
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            {loading ? 'Authenticating...' : isSignUp ? 'Create Account' : 'Sign In'}
             {!loading && <ArrowRight size={18} />}
           </button>
 
         </form>
+
+        <p style={{ marginTop: '1.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)', zIndex: 1 }}>
+          {isSignUp ? 'Already have an account? ' : 'New to Zenith Focus? '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError('');
+              setUsername('');
+              setName('');
+              setPassword('');
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--accent-primary)',
+              fontWeight: 700,
+              cursor: 'pointer',
+              padding: 0,
+              textDecoration: 'underline'
+            }}
+          >
+            {isSignUp ? 'Sign In' : 'Register Now'}
+          </button>
+        </p>
       </GlassCard>
     </div>
   );

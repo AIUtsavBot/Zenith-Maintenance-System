@@ -177,89 +177,104 @@ export async function restoreFromSupabaseIfEmpty() {
     const hasPlanners = Object.keys(db.planners).length > 0;
     const hasUsers = Object.keys(db.users).length > 0;
 
-    if (hasSessions || hasPlanners || hasUsers) {
+    if (hasSessions && hasPlanners && hasUsers) {
       return;
     }
 
-    console.log('Local DB is empty. Attempting to restore data from Supabase...');
+    console.log('Checking for missing local DB components to restore from Supabase...');
+    let modified = false;
 
-    // 1. Restore Users
-    const { data: dbUsers, error: usersErr } = await supabase
-      .from('users')
-      .select('*');
+    // 1. Restore Users if empty
+    if (!hasUsers) {
+      console.log('Local users DB is empty. Attempting to restore users from Supabase...');
+      const { data: dbUsers, error: usersErr } = await supabase
+        .from('users')
+        .select('*');
 
-    if (usersErr) throw usersErr;
-
-    // 2. Restore Sessions
-    const { data: dbSessions, error: sessionsErr } = await supabase
-      .from('sessions')
-      .select('*');
-
-    if (sessionsErr) throw sessionsErr;
-
-    // 3. Restore Planners
-    const { data: dbPlanners, error: plannersErr } = await supabase
-      .from('planners')
-      .select('*');
-
-    if (plannersErr) throw plannersErr;
-
-    const users: Record<string, UserRecord> = {};
-    if (dbUsers) {
-      for (const row of dbUsers) {
-        users[row.username.toLowerCase()] = {
-          username: row.username,
-          passwordHash: row.password_hash || undefined,
-          role: row.role as 'admin' | 'user',
-          name: row.name || undefined
-        };
+      if (usersErr) {
+        console.error('Failed to retrieve users from Supabase:', usersErr);
+      } else if (dbUsers && dbUsers.length > 0) {
+        const users: Record<string, UserRecord> = {};
+        for (const row of dbUsers) {
+          users[row.username.toLowerCase()] = {
+            username: row.username,
+            passwordHash: row.password_hash || undefined,
+            role: row.role as 'admin' | 'user',
+            name: row.name || undefined
+          };
+        }
+        db.users = users;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(users).length} users from Supabase.`);
       }
     }
 
-    const sessions: Record<string, SessionData> = {};
-    if (dbSessions) {
-      for (const row of dbSessions) {
-        // Map user row.username. If missing, fall back to row.role or 'admin'
-        const owner = (row.username || row.role || 'admin').toLowerCase();
-        sessions[`${owner}_${row.date}`] = {
-          date: row.date,
-          status: row.status,
-          workStart: row.work_start,
-          workEnd: row.work_end,
-          breaks: row.breaks || [],
-          totalBreakMinutes: row.total_break_minutes || 0,
-          totalWorkMinutes: row.total_work_minutes || 0,
-          effectiveWorkMinutes: row.effective_work_minutes || 0,
-          notes: row.notes || '',
-          rating: row.rating || 0,
-          completedTasks: row.completed_tasks || [],
-          goals: row.goals || [],
-          synced: true
-        };
+    // 2. Restore Sessions if empty
+    if (!hasSessions) {
+      console.log('Local sessions DB is empty. Attempting to restore sessions from Supabase...');
+      const { data: dbSessions, error: sessionsErr } = await supabase
+        .from('sessions')
+        .select('*');
+
+      if (sessionsErr) {
+        console.error('Failed to retrieve sessions from Supabase:', sessionsErr);
+      } else if (dbSessions && dbSessions.length > 0) {
+        const sessions: Record<string, SessionData> = {};
+        for (const row of dbSessions) {
+          const owner = (row.username || row.role || 'admin').toLowerCase();
+          sessions[`${owner}_${row.date}`] = {
+            date: row.date,
+            status: row.status,
+            workStart: row.work_start,
+            workEnd: row.work_end,
+            breaks: row.breaks || [],
+            totalBreakMinutes: row.total_break_minutes || 0,
+            totalWorkMinutes: row.total_work_minutes || 0,
+            effectiveWorkMinutes: row.effective_work_minutes || 0,
+            notes: row.notes || '',
+            rating: row.rating || 0,
+            completedTasks: row.completed_tasks || [],
+            goals: row.goals || [],
+            synced: true
+          };
+        }
+        db.sessions = { ...db.sessions, ...sessions };
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(sessions).length} sessions from Supabase.`);
       }
     }
 
-    const planners: Record<string, PlannerData> = {};
-    if (dbPlanners) {
-      for (const row of dbPlanners) {
-        const owner = (row.username || row.role || 'admin').toLowerCase();
-        planners[`${owner}_${row.date}`] = {
-          date: row.date,
-          goals: row.goals || [],
-          priorities: row.priorities || [],
-          checklist: row.checklist || [],
-          reminders: row.reminders || [],
-          synced: true
-        };
+    // 3. Restore Planners if empty
+    if (!hasPlanners) {
+      console.log('Local planners DB is empty. Attempting to restore planners from Supabase...');
+      const { data: dbPlanners, error: plannersErr } = await supabase
+        .from('planners')
+        .select('*');
+
+      if (plannersErr) {
+        console.error('Failed to retrieve planners from Supabase:', plannersErr);
+      } else if (dbPlanners && dbPlanners.length > 0) {
+        const planners: Record<string, PlannerData> = {};
+        for (const row of dbPlanners) {
+          const owner = (row.username || row.role || 'admin').toLowerCase();
+          planners[`${owner}_${row.date}`] = {
+            date: row.date,
+            goals: row.goals || [],
+            priorities: row.priorities || [],
+            checklist: row.checklist || [],
+            reminders: row.reminders || [],
+            synced: true
+          };
+        }
+        db.planners = { ...db.planners, ...planners };
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(planners).length} planners from Supabase.`);
       }
     }
 
-    db.users = users;
-    db.sessions = sessions;
-    db.planners = planners;
-
-    writeLocalDb(db);
-    console.log(`Successfully restored ${Object.keys(users).length} users, ${Object.keys(sessions).length} sessions, and ${Object.keys(planners).length} planners from Supabase.`);
+    if (modified) {
+      writeLocalDb(db);
+    }
   } catch (error) {
     console.error('Failed to restore data from Supabase:', error);
   }

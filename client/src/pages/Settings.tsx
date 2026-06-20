@@ -6,9 +6,10 @@ import { api } from '../api.js';
 interface SettingsProps {
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
+  role: 'admin' | 'user' | null;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
+export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => {
   // Password change states
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -27,6 +28,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
   const [statusLoading, setStatusLoading] = useState(false);
 
   const fetchConfigStatus = async () => {
+    if (role !== 'admin') return;
     setStatusLoading(true);
     try {
       const configRes = await fetch('http://localhost:5000/api/settings/status', {
@@ -46,8 +48,10 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
   };
 
   useEffect(() => {
-    fetchConfigStatus();
-  }, []);
+    if (role === 'admin') {
+      fetchConfigStatus();
+    }
+  }, [role]);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,10 +121,11 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
       </div>
 
       {/* Settings Sections Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }} id="settings-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: role === 'admin' ? '1fr 1fr' : '1fr', maxWidth: role === 'admin' ? '1000px' : '500px', margin: role === 'admin' ? '0' : '0 auto', gap: '1.5rem' }} id="settings-grid">
         
         {/* Left Column: Database Integration & Backup */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {role === 'admin' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* DB & Supabase status */}
           <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -198,7 +203,8 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
               <Download size={16} /> Export Session Backup (.json)
             </button>
           </GlassCard>
-        </div>
+          </div>
+        )}
 
         {/* Right Column: Authentication Credentials & Theme */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -206,7 +212,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme }) => {
           {/* Security Password Changer */}
           <GlassCard>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.2rem', marginBottom: '1.25rem' }}>
-              <Key size={18} style={{ color: 'var(--color-break)' }} /> Access Protection
+              <Key size={18} style={{ color: 'var(--color-break)' }} /> Access Protection ({role === 'admin' ? 'Admin' : 'User'})
             </h3>
 
             <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

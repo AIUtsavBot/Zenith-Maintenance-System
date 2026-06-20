@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
 import { initDb, isSupabaseConfigured, restoreFromSupabaseIfEmpty, retryUnsyncedData } from './config/db.js';
-import { authenticateToken } from './middlewares/authMiddleware.js';
+import { authenticateToken, requireAdmin } from './middlewares/authMiddleware.js';
 import { login, changePassword, validateToken } from './controllers/authController.js';
 import {
   getCurrentSession,
@@ -78,7 +78,7 @@ app.post('/api/planner/:date', authenticateToken, updatePlannerData);
 app.get('/api/ai/insights', authenticateToken, getAiInsights);
 
 // Configuration Status Routes
-app.get('/api/settings/status', authenticateToken, (req, res) => {
+app.get('/api/settings/status', authenticateToken, requireAdmin, (req, res) => {
   res.json({
     supabaseConfigured: isSupabaseConfigured(),
     databaseMode: isSupabaseConfigured() ? 'supabase' : 'local',

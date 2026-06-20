@@ -10,6 +10,7 @@ import { api, getToken, removeToken } from './api.js';
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [currentTab, setCurrentTab] = useState<string>('tracker');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
@@ -28,12 +29,14 @@ export const App: React.FC = () => {
       }
 
       try {
-        await api.auth.validate();
+        const response = await api.auth.validate();
         setIsAuthenticated(true);
+        setRole(response.role || 'user');
         await refreshSession();
       } catch (err) {
         removeToken();
         setIsAuthenticated(false);
+        setRole(null);
       }
     };
     checkAuth();
@@ -67,8 +70,9 @@ export const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (userRole: 'admin' | 'user') => {
     setIsAuthenticated(true);
+    setRole(userRole);
   };
 
   const handleLogoutClick = () => {
@@ -81,6 +85,7 @@ export const App: React.FC = () => {
     setIsAuthenticated(false);
     setSession(null);
     setStatus('Offline');
+    setRole(null);
   };
 
   if (isAuthenticated === null) {
@@ -117,7 +122,7 @@ export const App: React.FC = () => {
       case 'planner':
         return <Planner />;
       case 'settings':
-        return <Settings theme={theme} setTheme={setTheme} />;
+        return <Settings theme={theme} setTheme={setTheme} role={role} />;
       default:
         return (
           <Tracker
@@ -140,6 +145,7 @@ export const App: React.FC = () => {
         theme={theme}
         setTheme={setTheme}
         onLogout={handleLogoutClick}
+        role={role}
       />
       <main className="main-content">
         {renderTabContent()}

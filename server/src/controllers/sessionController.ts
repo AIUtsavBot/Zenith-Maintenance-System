@@ -29,10 +29,11 @@ function calculateBreakMinutes(breaks: BreakRecord[], nowStr: string): number {
 // Retrieve current session status and detect forgotten sessions
 export async function getCurrentSession(req: AuthenticatedRequest, res: Response) {
   try {
+    const role = req.user?.role || 'admin';
     const today = getLocalDateString();
     
     // Find all sessions to check if there is an active session from any date
-    const allSessions = getAllSessions();
+    const allSessions = getAllSessions(role);
     
     // Sort sessions to find the most recent one
     const sorted = [...allSessions].sort((a, b) => b.date.localeCompare(a.date));
@@ -57,7 +58,7 @@ export async function getCurrentSession(req: AuthenticatedRequest, res: Response
     }
 
     // No active session in progress. Let's see if we have a closed session for today.
-    const todaySession = await getSession(today);
+    const todaySession = await getSession(role, today);
     return res.json({
       session: todaySession, // Can be null (offline) or closed session
       forgotten: false
@@ -71,8 +72,9 @@ export async function getCurrentSession(req: AuthenticatedRequest, res: Response
 // Start a new work session
 export async function startWork(req: AuthenticatedRequest, res: Response) {
   try {
+    const role = req.user?.role || 'admin';
     const today = getLocalDateString();
-    let session = await getSession(today);
+    let session = await getSession(role, today);
 
     if (session && session.status !== 'Offline') {
       return res.status(400).json({ error: 'Work session is already running', session });
@@ -99,7 +101,7 @@ export async function startWork(req: AuthenticatedRequest, res: Response) {
       goals: session?.goals || []
     };
 
-    const saved = await saveSession(today, newSession);
+    const saved = await saveSession(role, today, newSession);
     return res.json({ message: 'Work session started', session: saved });
   } catch (error) {
     console.error('Start work error:', error);
@@ -110,11 +112,12 @@ export async function startWork(req: AuthenticatedRequest, res: Response) {
 // Start a break
 export async function startBreak(req: AuthenticatedRequest, res: Response) {
   try {
+    const role = req.user?.role || 'admin';
     const today = getLocalDateString();
     
     // Find active session first
-    const all = getAllSessions();
-    const session = all.find(s => s.status !== 'Offline') || await getSession(today);
+    const all = getAllSessions(role);
+    const session = all.find(s => s.status !== 'Offline') || await getSession(role, today);
 
     if (!session) {
       return res.status(400).json({ error: 'No active work session found' });
@@ -136,7 +139,7 @@ export async function startBreak(req: AuthenticatedRequest, res: Response) {
       end: null
     });
 
-    const saved = await saveSession(session.date, session);
+    const saved = await saveSession(role, session.date, session);
     return res.json({ message: 'Break started', session: saved });
   } catch (error) {
     console.error('Start break error:', error);
@@ -147,9 +150,10 @@ export async function startBreak(req: AuthenticatedRequest, res: Response) {
 // End break and return to working status
 export async function endBreak(req: AuthenticatedRequest, res: Response) {
   try {
+    const role = req.user?.role || 'admin';
     const today = getLocalDateString();
-    const all = getAllSessions();
-    const session = all.find(s => s.status !== 'Offline') || await getSession(today);
+    const all = getAllSessions(role);
+    const session = all.find(s => s.status !== 'Offline') || await getSession(role, today);
 
     if (!session) {
       return res.status(400).json({ error: 'No active work session found' });
@@ -170,7 +174,7 @@ export async function endBreak(req: AuthenticatedRequest, res: Response) {
     session.status = 'Working';
     session.totalBreakMinutes = calculateBreakMinutes(session.breaks, nowStr);
 
-    const saved = await saveSession(session.date, session);
+    const saved = await saveSession(role, session.date, session);
     return res.json({ message: 'Break ended', session: saved });
   } catch (error) {
     console.error('End break error:', error);
@@ -181,9 +185,10 @@ export async function endBreak(req: AuthenticatedRequest, res: Response) {
 // End work session and finalize totals
 export async function endWork(req: AuthenticatedRequest, res: Response) {
   try {
+    const role = req.user?.role || 'admin';
     const today = getLocalDateString();
-    const all = getAllSessions();
-    const session = all.find(s => s.status !== 'Offline') || await getSession(today);
+    const all = getAllSessions(role);
+    const session = all.find(s => s.status !== 'Offline') || await getSession(role, today);
 
     if (!session) {
       return res.status(400).json({ error: 'No active work session found' });
@@ -208,7 +213,7 @@ export async function endWork(req: AuthenticatedRequest, res: Response) {
     session.totalWorkMinutes = getMinutesDiff(startStr, nowStr);
     session.effectiveWorkMinutes = Math.max(0, session.totalWorkMinutes - session.totalBreakMinutes);
 
-    const saved = await saveSession(session.date, session);
+    const saved = await saveSession(role, session.date, session);
     return res.json({ message: 'Work session ended', session: saved });
   } catch (error) {
     console.error('End work error:', error);
@@ -220,9 +225,10 @@ export async function endWork(req: AuthenticatedRequest, res: Response) {
 export async function resolveForgottenSession(req: AuthenticatedRequest, res: Response) {
   const { action, customEndTime } = req.body; // action: 'close' | 'discard'
   const today = getLocalDateString();
+  const role = req.user?.role || 'admin';
 
   try {
-    const all = getAllSessions();
+    const all = getAllSessions(role);
     const forgottenSession = all.find(s => s.status !== 'Offline' && s.date !== today);
 
     if (!forgottenSession) {
@@ -238,7 +244,7 @@ export async function resolveForgottenSession(req: AuthenticatedRequest, res: Re
       forgottenSession.effectiveWorkMinutes = 0;
       forgottenSession.notes = forgottenSession.notes || 'Session discarded';
       
-      const saved = await saveSession(forgottenSession.date, forgottenSession);
+      const saved = await saveSession(role, forgottenSession.date, forgottenSession);
       return res.json({ message: 'Session discarded successfully', session: saved });
     }
 
@@ -275,7 +281,7 @@ export async function resolveForgottenSession(req: AuthenticatedRequest, res: Re
       forgottenSession.totalWorkMinutes = getMinutesDiff(startStr, endTimestamp);
       forgottenSession.effectiveWorkMinutes = Math.max(0, forgottenSession.totalWorkMinutes - forgottenSession.totalBreakMinutes);
 
-      const saved = await saveSession(forgottenSession.date, forgottenSession);
+      const saved = await saveSession(role, forgottenSession.date, forgottenSession);
       return res.json({ message: 'Session closed retroactively', session: saved });
     }
 

@@ -17,6 +17,7 @@ interface SidebarProps {
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
   onLogout: () => void;
+  role: 'admin' | 'user' | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,7 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   status,
   theme,
   setTheme,
-  onLogout
+  onLogout,
+  role
 }) => {
   const navItems = [
     { id: 'tracker', label: 'Time Tracker', icon: Clock },
@@ -87,6 +89,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
             Personal Productivity Engine
           </p>
+          {role && (
+            <div
+              style={{
+                display: 'inline-block',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+                background: role === 'admin' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                color: role === 'admin' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                marginTop: '0.5rem',
+                border: '1px solid var(--border-glass)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}
+            >
+              {role} Mode
+            </div>
+          )}
         </div>
 
         {/* Status Indicator */}
@@ -240,6 +261,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </h2>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {role && (
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  padding: '0.15rem 0.4rem',
+                  borderRadius: '4px',
+                  background: role === 'admin' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                  color: role === 'admin' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-glass)',
+                  textTransform: 'uppercase'
+                }}
+              >
+                {role}
+              </span>
+            )}
             <span
               style={{
                 width: '8px',

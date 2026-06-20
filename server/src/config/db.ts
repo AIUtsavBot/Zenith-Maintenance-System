@@ -43,6 +43,7 @@ interface LocalDB {
   sessions: Record<string, SessionData>;
   planners: Record<string, PlannerData>;
   appPasswordHash?: string;
+  appUserPasswordHash?: string;
 }
 
 // Initial DB template
@@ -94,13 +95,14 @@ export function isSupabaseConfigured(): boolean {
 }
 
 // Sync session data to Supabase
-async function syncSessionToSupabase(session: SessionData): Promise<boolean> {
+async function syncSessionToSupabase(role: string, session: SessionData): Promise<boolean> {
   if (!supabase) return false;
 
   try {
     const { error } = await supabase
       .from('sessions')
       .upsert({
+        role: role,
         date: session.date,
         status: session.status,
         work_start: session.workStart,
@@ -120,19 +122,20 @@ async function syncSessionToSupabase(session: SessionData): Promise<boolean> {
     }
     return true;
   } catch (error) {
-    console.error(`Supabase Session Sync error for date ${session.date}:`, error);
+    console.error(`Supabase Session Sync error for date ${session.date} and role ${role}:`, error);
     return false;
   }
 }
 
 // Sync planner data to Supabase
-async function syncPlannerToSupabase(planner: PlannerData): Promise<boolean> {
+async function syncPlannerToSupabase(role: string, planner: PlannerData): Promise<boolean> {
   if (!supabase) return false;
 
   try {
     const { error } = await supabase
       .from('planners')
       .upsert({
+        role: role,
         date: planner.date,
         goals: planner.goals,
         priorities: planner.priorities,
@@ -145,7 +148,7 @@ async function syncPlannerToSupabase(planner: PlannerData): Promise<boolean> {
     }
     return true;
   } catch (error) {
-    console.error(`Supabase Planner Sync error for date ${planner.date}:`, error);
+    console.error(`Supabase Planner Sync error for date ${planner.date} and role ${role}:`, error);
     return false;
   }
 }
@@ -180,7 +183,8 @@ export async function restoreFromSupabaseIfEmpty() {
     const sessions: Record<string, SessionData> = {};
     if (dbSessions) {
       for (const row of dbSessions) {
-        sessions[row.date] = {
+        const rowRole = row.role || 'admin';
+        sessions[`${rowRole}_${row.date}`] = {
           date: row.date,
           status: row.status,
           workStart: row.work_start,
@@ -201,7 +205,8 @@ export async function restoreFromSupabaseIfEmpty() {
     const planners: Record<string, PlannerData> = {};
     if (dbPlanners) {
       for (const row of dbPlanners) {
-        planners[row.date] = {
+        const rowRole = row.role || 'admin';
+        planners[`${rowRole}_${row.date}`] = {
           date: row.date,
           goals: row.goals || [],
           priorities: row.priorities || [],
@@ -223,26 +228,27 @@ export async function restoreFromSupabaseIfEmpty() {
 }
 
 // Session CRUD functions
-export async function getSession(date: string): Promise<SessionData | null> {
+export async function getSession(role: string, date: string): Promise<SessionData | null> {
   const db = readLocalDb();
-  return db.sessions[date] || null;
+  return db.sessions[`${role}_${date}`] || null;
 }
 
-export async function saveSession(date: string, session: SessionData): Promise<SessionData> {
+export async function saveSession(role: string, date: string, session: SessionData): Promise<SessionData> {
   const db = readLocalDb();
+  const key = `${role}_${date}`;
   
   // Save locally first immediately to be fast and offline-resilient
   const sessionToSave = { ...session, synced: false };
-  db.sessions[date] = sessionToSave;
+  db.sessions[key] = sessionToSave;
   writeLocalDb(db);
 
   // Sync to Supabase in the background asynchronously without blocking the user response
   if (supabase) {
-    syncSessionToSupabase(session).then((synced) => {
+    syncSessionToSupabase(role, session).then((synced) => {
       if (synced) {
         const currentDb = readLocalDb();
-        if (currentDb.sessions[date]) {
-          currentDb.sessions[date].synced = true;
+        if (currentDb.sessions[key]) {
+          currentDb.sessions[key].synced = true;
           writeLocalDb(currentDb);
         }
       }
@@ -254,32 +260,46 @@ export async function saveSession(date: string, session: SessionData): Promise<S
   return sessionToSave;
 }
 
-export function getAllSessions(): SessionData[] {
+export function getAllSessions(role?: string): SessionData[] {
   const db = readLocalDb();
-  return Object.values(db.sessions);
+  if (role) {
+    return Object.entries(db.sessions)
+      .filter(([key]) => key.startsWith(`${role}_`))
+      .map(([_, val]) => val);
+  }
+  
+  // Backwards compatibility / restore logic support
+  return Object.entries(db.sessions).map(([key, val]) => {
+    // If the key is just a date without a role prefix (legacy data)
+    if (!key.includes('_')) {
+      return { ...val, date: key }; // treat as date key
+    }
+    return val;
+  });
 }
 
 // Planner CRUD functions
-export async function getPlanner(date: string): Promise<PlannerData | null> {
+export async function getPlanner(role: string, date: string): Promise<PlannerData | null> {
   const db = readLocalDb();
-  return db.planners[date] || null;
+  return db.planners[`${role}_${date}`] || null;
 }
 
-export async function savePlanner(date: string, planner: PlannerData): Promise<PlannerData> {
+export async function savePlanner(role: string, date: string, planner: PlannerData): Promise<PlannerData> {
   const db = readLocalDb();
+  const key = `${role}_${date}`;
   
   // Save locally first immediately to be fast and offline-resilient
   const plannerToSave = { ...planner, synced: false };
-  db.planners[date] = plannerToSave;
+  db.planners[key] = plannerToSave;
   writeLocalDb(db);
 
   // Sync to Supabase in the background asynchronously without blocking the user response
   if (supabase) {
-    syncPlannerToSupabase(planner).then((synced) => {
+    syncPlannerToSupabase(role, planner).then((synced) => {
       if (synced) {
         const currentDb = readLocalDb();
-        if (currentDb.planners[date]) {
-          currentDb.planners[date].synced = true;
+        if (currentDb.planners[key]) {
+          currentDb.planners[key].synced = true;
           writeLocalDb(currentDb);
         }
       }
@@ -291,8 +311,13 @@ export async function savePlanner(date: string, planner: PlannerData): Promise<P
   return plannerToSave;
 }
 
-export function getAllPlanners(): PlannerData[] {
+export function getAllPlanners(role?: string): PlannerData[] {
   const db = readLocalDb();
+  if (role) {
+    return Object.entries(db.planners)
+      .filter(([key]) => key.startsWith(`${role}_`))
+      .map(([_, val]) => val);
+  }
   return Object.values(db.planners);
 }
 
@@ -308,6 +333,17 @@ export function savePasswordHash(hash: string) {
   writeLocalDb(db);
 }
 
+export function getSavedUserPasswordHash(): string | null {
+  const db = readLocalDb();
+  return db.appUserPasswordHash || null;
+}
+
+export function saveUserPasswordHash(hash: string) {
+  const db = readLocalDb();
+  db.appUserPasswordHash = hash;
+  writeLocalDb(db);
+}
+
 // Automatically retry and push any unsynced background queue data
 export async function retryUnsyncedData() {
   if (!supabase) return;
@@ -316,24 +352,32 @@ export async function retryUnsyncedData() {
   let modified = false;
 
   // 1. Retry sessions
-  for (const [date, session] of Object.entries(db.sessions)) {
+  for (const [key, session] of Object.entries(db.sessions)) {
     if (!session.synced) {
-      console.log(`Retrying sync for session on date: ${date}`);
-      const synced = await syncSessionToSupabase(session);
+      const parts = key.split('_');
+      const activeRole = parts.length > 1 ? parts[0] : 'admin';
+      const activeDate = parts.length > 1 ? parts[1] : key;
+
+      console.log(`Retrying sync for session on date: ${activeDate} and role: ${activeRole}`);
+      const synced = await syncSessionToSupabase(activeRole, session);
       if (synced) {
-        db.sessions[date].synced = true;
+        db.sessions[key].synced = true;
         modified = true;
       }
     }
   }
 
   // 2. Retry planners
-  for (const [date, planner] of Object.entries(db.planners)) {
+  for (const [key, planner] of Object.entries(db.planners)) {
     if (!planner.synced) {
-      console.log(`Retrying sync for planner on date: ${date}`);
-      const synced = await syncPlannerToSupabase(planner);
+      const parts = key.split('_');
+      const activeRole = parts.length > 1 ? parts[0] : 'admin';
+      const activeDate = parts.length > 1 ? parts[1] : key;
+
+      console.log(`Retrying sync for planner on date: ${activeDate} and role: ${activeRole}`);
+      const synced = await syncPlannerToSupabase(activeRole, planner);
       if (synced) {
-        db.planners[date].synced = true;
+        db.planners[key].synced = true;
         modified = true;
       }
     }

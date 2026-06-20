@@ -4,7 +4,7 @@ import { GlassCard } from '../components/GlassCard.js';
 import { api, setToken } from '../api.js';
 
 interface LoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (role: 'admin' | 'user') => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
@@ -26,7 +26,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     try {
       const data = await api.auth.login(password);
       setToken(data.token);
-      onLoginSuccess();
+      onLoginSuccess(data.role || 'user');
     } catch (err: any) {
       setError(err.message || 'Incorrect password. Access Denied.');
     } finally {

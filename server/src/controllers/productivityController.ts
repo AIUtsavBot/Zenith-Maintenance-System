@@ -17,7 +17,10 @@ function getLocalDateString(offsetDays = 0): string {
 export async function getProductivityData(req: AuthenticatedRequest, res: Response) {
   const { date } = req.query;
   const targetDate = (date as string) || getLocalDateString();
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     let session = await getSession(username, targetDate);
@@ -51,7 +54,10 @@ export async function getProductivityData(req: AuthenticatedRequest, res: Respon
 export async function updateProductivityData(req: AuthenticatedRequest, res: Response) {
   const { date, notes, rating, completedTasks, goals } = req.body;
   const targetDate = date || getLocalDateString();
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     let session = await getSession(username, targetDate);
@@ -91,7 +97,10 @@ export async function updateProductivityData(req: AuthenticatedRequest, res: Res
 export async function getPlannerData(req: AuthenticatedRequest, res: Response) {
   const { date } = req.params;
   const targetDate = date || getLocalDateString();
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     let planner = await getPlanner(username, targetDate);
@@ -118,7 +127,10 @@ export async function updatePlannerData(req: AuthenticatedRequest, res: Response
   const { date } = req.params;
   const { goals, priorities, checklist, reminders } = req.body;
   const targetDate = date || getLocalDateString();
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     let planner = await getPlanner(username, targetDate);
@@ -148,7 +160,10 @@ export async function updatePlannerData(req: AuthenticatedRequest, res: Response
 
 // Get all session history for Calendar and Charts
 export async function getHistory(req: AuthenticatedRequest, res: Response) {
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
   try {
     const sessions = getAllSessions(username);
     // Sort in ascending order for historical trends
@@ -162,7 +177,10 @@ export async function getHistory(req: AuthenticatedRequest, res: Response) {
 
 // Get aggregated dashboard stats
 export async function getDashboardSummary(req: AuthenticatedRequest, res: Response) {
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
   try {
     const today = getLocalDateString();
     const sessions = getAllSessions(username);

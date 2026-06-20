@@ -131,7 +131,10 @@ No session data has been logged yet. Start a work session and log your notes/rat
 export async function getAiInsights(req: AuthenticatedRequest, res: Response) {
   const { period } = req.query; // 'daily' | 'weekly'
   const isWeekly = period === 'weekly';
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     const sessions = getAllSessions(username);

@@ -29,7 +29,10 @@ function calculateBreakMinutes(breaks: BreakRecord[], nowStr: string): number {
 // Retrieve current session status and detect forgotten sessions
 export async function getCurrentSession(req: AuthenticatedRequest, res: Response) {
   try {
-    const username = req.user?.username || 'admin';
+    const username = req.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Unauthorized: Missing username' });
+    }
     const today = getLocalDateString();
     
     // Find all sessions to check if there is an active session from any date
@@ -72,7 +75,10 @@ export async function getCurrentSession(req: AuthenticatedRequest, res: Response
 // Start a new work session
 export async function startWork(req: AuthenticatedRequest, res: Response) {
   try {
-    const username = req.user?.username || 'admin';
+    const username = req.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Unauthorized: Missing username' });
+    }
     const today = getLocalDateString();
     let session = await getSession(username, today);
 
@@ -112,7 +118,10 @@ export async function startWork(req: AuthenticatedRequest, res: Response) {
 // Start a break
 export async function startBreak(req: AuthenticatedRequest, res: Response) {
   try {
-    const username = req.user?.username || 'admin';
+    const username = req.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Unauthorized: Missing username' });
+    }
     const today = getLocalDateString();
     
     // Find active session first
@@ -150,7 +159,10 @@ export async function startBreak(req: AuthenticatedRequest, res: Response) {
 // End break and return to working status
 export async function endBreak(req: AuthenticatedRequest, res: Response) {
   try {
-    const username = req.user?.username || 'admin';
+    const username = req.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Unauthorized: Missing username' });
+    }
     const today = getLocalDateString();
     const all = getAllSessions(username);
     const session = all.find(s => s.status !== 'Offline') || await getSession(username, today);
@@ -185,7 +197,10 @@ export async function endBreak(req: AuthenticatedRequest, res: Response) {
 // End work session and finalize totals
 export async function endWork(req: AuthenticatedRequest, res: Response) {
   try {
-    const username = req.user?.username || 'admin';
+    const username = req.user?.username;
+    if (!username) {
+      return res.status(401).json({ error: 'Unauthorized: Missing username' });
+    }
     const today = getLocalDateString();
     const all = getAllSessions(username);
     const session = all.find(s => s.status !== 'Offline') || await getSession(username, today);
@@ -225,7 +240,10 @@ export async function endWork(req: AuthenticatedRequest, res: Response) {
 export async function resolveForgottenSession(req: AuthenticatedRequest, res: Response) {
   const { action, customEndTime } = req.body; // action: 'close' | 'discard'
   const today = getLocalDateString();
-  const username = req.user?.username || 'admin';
+  const username = req.user?.username;
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized: Missing username' });
+  }
 
   try {
     const all = getAllSessions(username);

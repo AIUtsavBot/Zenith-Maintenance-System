@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Clock,
   LayoutDashboard,
@@ -7,7 +6,8 @@ import {
   Settings as SettingsIcon,
   LogOut,
   Moon,
-  Sun
+  Sun,
+  Users
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar View', icon: Calendar },
     { id: 'planner', label: 'Schedule Planner', icon: ListTodo },
+    { id: 'groups', label: 'Workspaces', icon: Users },
     { id: 'settings', label: 'Configuration', icon: SettingsIcon }
   ];
 

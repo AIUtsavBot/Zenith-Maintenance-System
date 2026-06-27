@@ -44,6 +44,140 @@ export interface UserRecord {
   passwordHash?: string; // Optional (e.g. Google-only logins don't require password hash)
   role: 'admin' | 'user';
   name?: string;
+  email?: string;
+  timezone?: string;
+  emailVerified?: boolean;
+  synced?: boolean;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string;
+  inviteCode: string;
+  owner: string;
+  createdAt: string;
+  settings?: any;
+  synced?: boolean;
+}
+
+export interface Member {
+  id: string; // "groupId_username"
+  groupId: string;
+  username: string;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+  synced?: boolean;
+}
+
+export interface Task {
+  id: string;
+  groupId: string | null; // null for personal tasks
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  status: 'todo' | 'in_progress' | 'completed' | 'overdue';
+  dueDate: string;
+  createdBy: string;
+  tags: string[];
+  attachments: { name: string; url: string }[];
+  repeatOption: 'none' | 'daily' | 'weekly' | 'monthly';
+  checklist: { id: string; text: string; completed: boolean }[];
+  progress: number; // 0 to 100
+  createdAt: string;
+  synced?: boolean;
+}
+
+export interface TaskAssignment {
+  id: string; // "taskId_username"
+  taskId: string;
+  username: string;
+  synced?: boolean;
+}
+
+export interface Goal {
+  id: string;
+  groupId: string;
+  title: string;
+  description: string;
+  deadline: string;
+  milestones: { id: string; text: string; completed: boolean }[];
+  progress: number;
+  completionPercent: number;
+  createdAt: string;
+  synced?: boolean;
+}
+
+export interface GoalMember {
+  id: string; // "goalId_username"
+  goalId: string;
+  username: string;
+  synced?: boolean;
+}
+
+export interface Reminder {
+  id: string;
+  userId: string;
+  type: 'personal' | 'task' | 'goal' | 'group' | 'meeting';
+  targetId?: string; // e.g. taskId, goalId, groupId
+  title: string;
+  message: string;
+  recurrence: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom';
+  timing: {
+    type: 'exact' | 'before_due' | 'after_due';
+    time: string; // ISO date-time for exact, or time duration (e.g. '24h', '2h', '30m')
+  }[];
+  triggerTimes: string[]; // ISO timestamps of upcoming reminder triggers
+  lastTriggered?: string | null;
+  createdAt: string;
+  synced?: boolean;
+}
+
+export interface Notification {
+  id: string;
+  username: string;
+  type: 'task_assigned' | 'reminder' | 'goal_updated' | 'group_invite' | 'member_joined' | 'member_left' | 'task_completed' | 'ai_suggestion' | 'productivity_alert';
+  title: string;
+  description: string;
+  read: boolean;
+  createdAt: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high';
+  metadata?: any;
+  synced?: boolean;
+}
+
+export interface ActivityLog {
+  id: string;
+  groupId: string | null;
+  username: string;
+  action: string;
+  targetId?: string;
+  targetType?: string;
+  createdAt: string;
+  synced?: boolean;
+}
+
+export interface EmailPreferences {
+  username: string;
+  receiveReminderEmails: boolean;
+  receiveTaskEmails: boolean;
+  receiveGoalEmails: boolean;
+  receiveWeeklyReports: boolean;
+  receiveAiReports: boolean;
+  receiveMarketingEmails: boolean;
+  enableDND: boolean;
+  quietHoursStart: string; // HH:MM
+  quietHoursEnd: string; // HH:MM
+  synced?: boolean;
+}
+
+export interface UserSettings {
+  username: string;
+  theme: 'dark' | 'light';
+  offlineFallback: boolean;
+  synced?: boolean;
 }
 
 interface LocalDB {
@@ -52,13 +186,35 @@ interface LocalDB {
   users: Record<string, UserRecord>; // normalized_username -> UserRecord
   appPasswordHash?: string;
   appUserPasswordHash?: string;
+  groups: Record<string, Group>;
+  members: Record<string, Member>;
+  tasks: Record<string, Task>;
+  taskAssignments: Record<string, TaskAssignment>;
+  goals: Record<string, Goal>;
+  goalMembers: Record<string, GoalMember>;
+  reminders: Record<string, Reminder>;
+  notifications: Record<string, Notification>;
+  activityLogs: Record<string, ActivityLog>;
+  emailPreferences: Record<string, EmailPreferences>;
+  userSettings: Record<string, UserSettings>;
 }
 
 // Initial DB template
 const initialDb: LocalDB = {
   sessions: {},
   planners: {},
-  users: {}
+  users: {},
+  groups: {},
+  members: {},
+  tasks: {},
+  taskAssignments: {},
+  goals: {},
+  goalMembers: {},
+  reminders: {},
+  notifications: {},
+  activityLogs: {},
+  emailPreferences: {},
+  userSettings: {}
 };
 
 // Check and initialize local db file
@@ -78,9 +234,18 @@ function readLocalDb(): LocalDB {
     const data = fs.readFileSync(DB_FILE, 'utf-8');
     const parsed = JSON.parse(data) as LocalDB;
     // Backwards compatibility safety check
-    if (!parsed.users) {
-      parsed.users = {};
-    }
+    if (!parsed.users) parsed.users = {};
+    if (!parsed.groups) parsed.groups = {};
+    if (!parsed.members) parsed.members = {};
+    if (!parsed.tasks) parsed.tasks = {};
+    if (!parsed.taskAssignments) parsed.taskAssignments = {};
+    if (!parsed.goals) parsed.goals = {};
+    if (!parsed.goalMembers) parsed.goalMembers = {};
+    if (!parsed.reminders) parsed.reminders = {};
+    if (!parsed.notifications) parsed.notifications = {};
+    if (!parsed.activityLogs) parsed.activityLogs = {};
+    if (!parsed.emailPreferences) parsed.emailPreferences = {};
+    if (!parsed.userSettings) parsed.userSettings = {};
     return parsed;
   } catch (err) {
     console.error('Failed to read local DB, using empty template:', err);
@@ -289,25 +454,36 @@ export async function getUser(username: string): Promise<UserRecord | null> {
 export async function saveUser(username: string, user: UserRecord): Promise<UserRecord> {
   const db = readLocalDb();
   const normUser = username.toLowerCase();
-  db.users[normUser] = user;
+  const userToSave = { ...user, synced: false };
+  db.users[normUser] = userToSave;
   writeLocalDb(db);
 
   if (supabase) {
     try {
-      await supabase
+      const { error } = await supabase
         .from('users')
         .upsert({
           username: normUser,
           password_hash: user.passwordHash || null,
           role: user.role,
-          name: user.name || null
+          name: user.name || null,
+          email: user.email || null,
+          timezone: user.timezone || 'UTC',
+          email_verified: user.emailVerified || false
         });
+      if (!error) {
+        const currentDb = readLocalDb();
+        if (currentDb.users[normUser]) {
+          currentDb.users[normUser].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
     } catch (err) {
       console.error(`Supabase User Sync error for ${normUser}:`, err);
     }
   }
 
-  return user;
+  return userToSave;
 }
 
 export function getAllUsers(): UserRecord[] {
@@ -435,6 +611,747 @@ export function saveUserPasswordHash(hash: string) {
   writeLocalDb(db);
 }
 
+// Supabase synchronization helpers
+async function syncGroupToSupabase(group: Group): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('groups').upsert({
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      avatar: group.avatar,
+      invite_code: group.inviteCode,
+      owner: group.owner.toLowerCase(),
+      created_at: group.createdAt,
+      settings: group.settings || {}
+    });
+    return !error;
+  } catch (err) {
+    console.error('Group sync error:', err);
+    return false;
+  }
+}
+
+async function syncMemberToSupabase(member: Member): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('members').upsert({
+      id: member.id,
+      group_id: member.groupId,
+      username: member.username.toLowerCase(),
+      role: member.role,
+      joined_at: member.joinedAt
+    });
+    return !error;
+  } catch (err) {
+    console.error('Member sync error:', err);
+    return false;
+  }
+}
+
+async function syncTaskToSupabase(task: Task): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('tasks').upsert({
+      id: task.id,
+      group_id: task.groupId,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: task.status,
+      due_date: task.dueDate,
+      created_by: task.createdBy.toLowerCase(),
+      tags: task.tags,
+      attachments: task.attachments,
+      repeat_option: task.repeatOption,
+      checklist: task.checklist,
+      progress: task.progress,
+      created_at: task.createdAt
+    });
+    return !error;
+  } catch (err) {
+    console.error('Task sync error:', err);
+    return false;
+  }
+}
+
+async function syncTaskAssignmentToSupabase(assign: TaskAssignment): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('task_assignments').upsert({
+      id: assign.id,
+      task_id: assign.taskId,
+      username: assign.username.toLowerCase()
+    });
+    return !error;
+  } catch (err) {
+    console.error('Assignment sync error:', err);
+    return false;
+  }
+}
+
+async function syncGoalToSupabase(goal: Goal): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('goals').upsert({
+      id: goal.id,
+      group_id: goal.groupId,
+      title: goal.title,
+      description: goal.description,
+      deadline: goal.deadline,
+      milestones: goal.milestones,
+      progress: goal.progress,
+      completion_percent: goal.completionPercent,
+      created_at: goal.createdAt
+    });
+    return !error;
+  } catch (err) {
+    console.error('Goal sync error:', err);
+    return false;
+  }
+}
+
+async function syncGoalMemberToSupabase(member: GoalMember): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('goal_members').upsert({
+      id: member.id,
+      goal_id: member.goalId,
+      username: member.username.toLowerCase()
+    });
+    return !error;
+  } catch (err) {
+    console.error('Goal member sync error:', err);
+    return false;
+  }
+}
+
+async function syncReminderToSupabase(rem: Reminder): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('reminders').upsert({
+      id: rem.id,
+      user_id: rem.userId.toLowerCase(),
+      type: rem.type,
+      target_id: rem.targetId || null,
+      title: rem.title,
+      message: rem.message,
+      recurrence: rem.recurrence,
+      timing: rem.timing,
+      trigger_times: rem.triggerTimes,
+      last_triggered: rem.lastTriggered || null,
+      created_at: rem.createdAt
+    });
+    return !error;
+  } catch (err) {
+    console.error('Reminder sync error:', err);
+    return false;
+  }
+}
+
+async function syncNotificationToSupabase(notif: Notification): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('notifications').upsert({
+      id: notif.id,
+      username: notif.username.toLowerCase(),
+      type: notif.type,
+      title: notif.title,
+      description: notif.description,
+      read: notif.read,
+      created_at: notif.createdAt,
+      category: notif.category,
+      priority: notif.priority,
+      metadata: notif.metadata || {}
+    });
+    return !error;
+  } catch (err) {
+    console.error('Notification sync error:', err);
+    return false;
+  }
+}
+
+async function syncActivityLogToSupabase(log: ActivityLog): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('activity_logs').upsert({
+      id: log.id,
+      group_id: log.groupId || null,
+      username: log.username.toLowerCase(),
+      action: log.action,
+      target_id: log.targetId || null,
+      target_type: log.targetType || null,
+      created_at: log.createdAt
+    });
+    return !error;
+  } catch (err) {
+    console.error('Activity log sync error:', err);
+    return false;
+  }
+}
+
+async function syncEmailPreferencesToSupabase(prefs: EmailPreferences): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('email_preferences').upsert({
+      username: prefs.username.toLowerCase(),
+      receive_reminder_emails: prefs.receiveReminderEmails,
+      receive_task_emails: prefs.receiveTaskEmails,
+      receive_goal_emails: prefs.receiveGoalEmails,
+      receive_weekly_reports: prefs.receiveWeeklyReports,
+      receive_ai_reports: prefs.receiveAiReports,
+      receive_marketing_emails: prefs.receiveMarketingEmails,
+      enable_dnd: prefs.enableDND,
+      quiet_hours_start: prefs.quietHoursStart,
+      quiet_hours_end: prefs.quietHoursEnd
+    });
+    return !error;
+  } catch (err) {
+    console.error('Email preferences sync error:', err);
+    return false;
+  }
+}
+
+async function syncUserSettingsToSupabase(settings: UserSettings): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('user_settings').upsert({
+      username: settings.username.toLowerCase(),
+      theme: settings.theme,
+      offline_fallback: settings.offlineFallback
+    });
+    return !error;
+  } catch (err) {
+    console.error('User settings sync error:', err);
+    return false;
+  }
+}
+
+// Groups CRUD
+export async function getGroup(id: string): Promise<Group | null> {
+  const db = readLocalDb();
+  return db.groups[id] || null;
+}
+
+export async function saveGroup(id: string, group: Group): Promise<Group> {
+  const db = readLocalDb();
+  const groupToSave = { ...group, synced: false };
+  db.groups[id] = groupToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncGroupToSupabase(group).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.groups[id]) {
+          currentDb.groups[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg group sync error:', err));
+  }
+
+  return groupToSave;
+}
+
+export function getAllGroups(): Group[] {
+  const db = readLocalDb();
+  return Object.values(db.groups);
+}
+
+export async function deleteGroup(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.groups[id]) {
+    delete db.groups[id];
+    
+    // Cascading delete members, tasks, goals
+    for (const mId of Object.keys(db.members)) {
+      if (db.members[mId].groupId === id) {
+        delete db.members[mId];
+      }
+    }
+    for (const tId of Object.keys(db.tasks)) {
+      if (db.tasks[tId].groupId === id) {
+        delete db.tasks[tId];
+      }
+    }
+    for (const gId of Object.keys(db.goals)) {
+      if (db.goals[gId].groupId === id) {
+        delete db.goals[gId];
+      }
+    }
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('groups').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase group delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// Members CRUD
+export async function getMember(id: string): Promise<Member | null> {
+  const db = readLocalDb();
+  return db.members[id] || null;
+}
+
+export async function saveMember(id: string, member: Member): Promise<Member> {
+  const db = readLocalDb();
+  const memberToSave = { ...member, synced: false };
+  db.members[id] = memberToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncMemberToSupabase(member).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.members[id]) {
+          currentDb.members[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg member sync error:', err));
+  }
+
+  return memberToSave;
+}
+
+export function getGroupMembers(groupId: string): Member[] {
+  const db = readLocalDb();
+  return Object.values(db.members).filter(m => m.groupId === groupId);
+}
+
+export async function deleteMember(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.members[id]) {
+    delete db.members[id];
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('members').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase member delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// Tasks CRUD
+export async function getTask(id: string): Promise<Task | null> {
+  const db = readLocalDb();
+  return db.tasks[id] || null;
+}
+
+export async function saveTask(id: string, task: Task): Promise<Task> {
+  const db = readLocalDb();
+  const taskToSave = { ...task, synced: false };
+  db.tasks[id] = taskToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncTaskToSupabase(task).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.tasks[id]) {
+          currentDb.tasks[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg task sync error:', err));
+  }
+
+  return taskToSave;
+}
+
+export function getGroupTasks(groupId: string): Task[] {
+  const db = readLocalDb();
+  return Object.values(db.tasks).filter(t => t.groupId === groupId);
+}
+
+export function getUserTasks(username: string): Task[] {
+  const db = readLocalDb();
+  const normUser = username.toLowerCase();
+  const assignedTaskIds = new Set(
+    Object.values(db.taskAssignments)
+      .filter(a => a.username.toLowerCase() === normUser)
+      .map(a => a.taskId)
+  );
+  return Object.values(db.tasks).filter(t => t.createdBy.toLowerCase() === normUser || assignedTaskIds.has(t.id));
+}
+
+export function getAllTasks(): Task[] {
+  const db = readLocalDb();
+  return Object.values(db.tasks);
+}
+
+export async function deleteTask(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.tasks[id]) {
+    delete db.tasks[id];
+    // Delete associated assignments
+    for (const aId of Object.keys(db.taskAssignments)) {
+      if (db.taskAssignments[aId].taskId === id) {
+        delete db.taskAssignments[aId];
+      }
+    }
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('tasks').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase task delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// TaskAssignments CRUD
+export async function saveTaskAssignment(id: string, assignment: TaskAssignment): Promise<TaskAssignment> {
+  const db = readLocalDb();
+  const assignToSave = { ...assignment, synced: false };
+  db.taskAssignments[id] = assignToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncTaskAssignmentToSupabase(assignment).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.taskAssignments[id]) {
+          currentDb.taskAssignments[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg assignment sync error:', err));
+  }
+
+  return assignToSave;
+}
+
+export function getTaskAssignments(taskId: string): TaskAssignment[] {
+  const db = readLocalDb();
+  return Object.values(db.taskAssignments).filter(a => a.taskId === taskId);
+}
+
+export async function deleteTaskAssignment(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.taskAssignments[id]) {
+    delete db.taskAssignments[id];
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('task_assignments').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase assignment delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// Goals CRUD
+export async function getGoal(id: string): Promise<Goal | null> {
+  const db = readLocalDb();
+  return db.goals[id] || null;
+}
+
+export async function saveGoal(id: string, goal: Goal): Promise<Goal> {
+  const db = readLocalDb();
+  const goalToSave = { ...goal, synced: false };
+  db.goals[id] = goalToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncGoalToSupabase(goal).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.goals[id]) {
+          currentDb.goals[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg goal sync error:', err));
+  }
+
+  return goalToSave;
+}
+
+export function getGroupGoals(groupId: string): Goal[] {
+  const db = readLocalDb();
+  return Object.values(db.goals).filter(g => g.groupId === groupId);
+}
+
+export async function deleteGoal(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.goals[id]) {
+    delete db.goals[id];
+    // Delete goal members
+    for (const gmId of Object.keys(db.goalMembers)) {
+      if (db.goalMembers[gmId].goalId === id) {
+        delete db.goalMembers[gmId];
+      }
+    }
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('goals').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase goal delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// GoalMembers CRUD
+export async function saveGoalMember(id: string, member: GoalMember): Promise<GoalMember> {
+  const db = readLocalDb();
+  const gmToSave = { ...member, synced: false };
+  db.goalMembers[id] = gmToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncGoalMemberToSupabase(member).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.goalMembers[id]) {
+          currentDb.goalMembers[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg goal member sync error:', err));
+  }
+
+  return gmToSave;
+}
+
+export function getGoalMembers(goalId: string): GoalMember[] {
+  const db = readLocalDb();
+  return Object.values(db.goalMembers).filter(gm => gm.goalId === goalId);
+}
+
+export async function deleteGoalMember(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.goalMembers[id]) {
+    delete db.goalMembers[id];
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('goal_members').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase goal member delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// Reminders CRUD
+export async function getReminder(id: string): Promise<Reminder | null> {
+  const db = readLocalDb();
+  return db.reminders[id] || null;
+}
+
+export async function saveReminder(id: string, reminder: Reminder): Promise<Reminder> {
+  const db = readLocalDb();
+  const reminderToSave = { ...reminder, synced: false };
+  db.reminders[id] = reminderToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncReminderToSupabase(reminder).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.reminders[id]) {
+          currentDb.reminders[id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg reminder sync error:', err));
+  }
+
+  return reminderToSave;
+}
+
+export function getUserReminders(username: string): Reminder[] {
+  const db = readLocalDb();
+  const normUser = username.toLowerCase();
+  return Object.values(db.reminders).filter(r => r.userId.toLowerCase() === normUser);
+}
+
+export function getAllReminders(): Reminder[] {
+  const db = readLocalDb();
+  return Object.values(db.reminders);
+}
+
+export async function deleteReminder(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.reminders[id]) {
+    delete db.reminders[id];
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('reminders').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase reminder delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// Notifications CRUD
+export async function getNotification(id: string): Promise<Notification | null> {
+  const db = readLocalDb();
+  return db.notifications[id] || null;
+}
+
+export async function saveNotification(id: string, notification: Notification): Promise<Notification> {
+  const db = readLocalDb();
+  const notificationToSave = { ...notification, synced: false };
+  db.notifications[notification.id] = notificationToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncNotificationToSupabase(notification).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.notifications[notification.id]) {
+          currentDb.notifications[notification.id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg notification sync error:', err));
+  }
+
+  return notificationToSave;
+}
+
+export function getUserNotifications(username: string): Notification[] {
+  const db = readLocalDb();
+  const normUser = username.toLowerCase();
+  return Object.values(db.notifications).filter(n => n.username.toLowerCase() === normUser);
+}
+
+export async function deleteNotification(id: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (db.notifications[id]) {
+    delete db.notifications[id];
+    writeLocalDb(db);
+
+    if (supabase) {
+      try {
+        await supabase.from('notifications').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase notification delete error:', err);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// ActivityLogs CRUD
+export async function saveActivityLog(id: string, log: ActivityLog): Promise<ActivityLog> {
+  const db = readLocalDb();
+  const logToSave = { ...log, synced: false };
+  db.activityLogs[log.id] = logToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncActivityLogToSupabase(log).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.activityLogs[log.id]) {
+          currentDb.activityLogs[log.id].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg activity log sync error:', err));
+  }
+
+  return logToSave;
+}
+
+export function getGroupActivityLogs(groupId: string): ActivityLog[] {
+  const db = readLocalDb();
+  return Object.values(db.activityLogs).filter(l => l.groupId === groupId);
+}
+
+// Email Preferences CRUD
+export async function getEmailPreferences(username: string): Promise<EmailPreferences | null> {
+  const db = readLocalDb();
+  return db.emailPreferences[username.toLowerCase()] || null;
+}
+
+export async function saveEmailPreferences(username: string, prefs: EmailPreferences): Promise<EmailPreferences> {
+  const db = readLocalDb();
+  const normUser = username.toLowerCase();
+  const prefsToSave = { ...prefs, synced: false };
+  db.emailPreferences[normUser] = prefsToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncEmailPreferencesToSupabase(prefs).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.emailPreferences[normUser]) {
+          currentDb.emailPreferences[normUser].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg email preferences sync error:', err));
+  }
+
+  return prefsToSave;
+}
+
+// User Settings CRUD
+export async function getUserSettings(username: string): Promise<UserSettings | null> {
+  const db = readLocalDb();
+  return db.userSettings[username.toLowerCase()] || null;
+}
+
+export async function saveUserSettings(username: string, settings: UserSettings): Promise<UserSettings> {
+  const db = readLocalDb();
+  const normUser = username.toLowerCase();
+  const settingsToSave = { ...settings, synced: false };
+  db.userSettings[normUser] = settingsToSave;
+  writeLocalDb(db);
+
+  if (supabase) {
+    syncUserSettingsToSupabase(settings).then(synced => {
+      if (synced) {
+        const currentDb = readLocalDb();
+        if (currentDb.userSettings[normUser]) {
+          currentDb.userSettings[normUser].synced = true;
+          writeLocalDb(currentDb);
+        }
+      }
+    }).catch(err => console.error('Bg settings sync error:', err));
+  }
+
+  return settingsToSave;
+}
+
 // Automatically retry and push any unsynced background queue data
 export async function retryUnsyncedData() {
   if (!supabase) return;
@@ -469,6 +1386,162 @@ export async function retryUnsyncedData() {
       const synced = await syncPlannerToSupabase(activeOwner, planner);
       if (synced) {
         db.planners[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 3. Retry Users
+  for (const [key, u] of Object.entries(db.users)) {
+    if (!u.synced) {
+      console.log(`Retrying sync for user: ${key}`);
+      try {
+        const { error } = await supabase.from('users').upsert({
+          username: key,
+          password_hash: u.passwordHash || null,
+          role: u.role,
+          name: u.name || null,
+          email: u.email || null,
+          timezone: u.timezone || 'UTC',
+          email_verified: u.emailVerified || false
+        });
+        if (!error) {
+          db.users[key].synced = true;
+          modified = true;
+        }
+      } catch (err) {
+        console.error('Retrying user sync error:', err);
+      }
+    }
+  }
+
+  // 4. Retry Groups
+  for (const [key, g] of Object.entries(db.groups)) {
+    if (!g.synced) {
+      console.log(`Retrying sync for group: ${key}`);
+      const synced = await syncGroupToSupabase(g);
+      if (synced) {
+        db.groups[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 5. Retry Members
+  for (const [key, m] of Object.entries(db.members)) {
+    if (!m.synced) {
+      console.log(`Retrying sync for member: ${key}`);
+      const synced = await syncMemberToSupabase(m);
+      if (synced) {
+        db.members[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 6. Retry Tasks
+  for (const [key, t] of Object.entries(db.tasks)) {
+    if (!t.synced) {
+      console.log(`Retrying sync for task: ${key}`);
+      const synced = await syncTaskToSupabase(t);
+      if (synced) {
+        db.tasks[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 7. Retry Task Assignments
+  for (const [key, ta] of Object.entries(db.taskAssignments)) {
+    if (!ta.synced) {
+      console.log(`Retrying sync for assignment: ${key}`);
+      const synced = await syncTaskAssignmentToSupabase(ta);
+      if (synced) {
+        db.taskAssignments[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 8. Retry Goals
+  for (const [key, goal] of Object.entries(db.goals)) {
+    if (!goal.synced) {
+      console.log(`Retrying sync for goal: ${key}`);
+      const synced = await syncGoalToSupabase(goal);
+      if (synced) {
+        db.goals[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 9. Retry Goal Members
+  for (const [key, gm] of Object.entries(db.goalMembers)) {
+    if (!gm.synced) {
+      console.log(`Retrying sync for goal member: ${key}`);
+      const synced = await syncGoalMemberToSupabase(gm);
+      if (synced) {
+        db.goalMembers[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 10. Retry Reminders
+  for (const [key, r] of Object.entries(db.reminders)) {
+    if (!r.synced) {
+      console.log(`Retrying sync for reminder: ${key}`);
+      const synced = await syncReminderToSupabase(r);
+      if (synced) {
+        db.reminders[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 11. Retry Notifications
+  for (const [key, n] of Object.entries(db.notifications)) {
+    if (!n.synced) {
+      console.log(`Retrying sync for notification: ${key}`);
+      const synced = await syncNotificationToSupabase(n);
+      if (synced) {
+        db.notifications[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 12. Retry Activity Logs
+  for (const [key, al] of Object.entries(db.activityLogs)) {
+    if (!al.synced) {
+      console.log(`Retrying sync for activity log: ${key}`);
+      const synced = await syncActivityLogToSupabase(al);
+      if (synced) {
+        db.activityLogs[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 13. Retry Email Preferences
+  for (const [key, ep] of Object.entries(db.emailPreferences)) {
+    if (!ep.synced) {
+      console.log(`Retrying sync for email preferences: ${key}`);
+      const synced = await syncEmailPreferencesToSupabase(ep);
+      if (synced) {
+        db.emailPreferences[key].synced = true;
+        modified = true;
+      }
+    }
+  }
+
+  // 14. Retry User Settings
+  for (const [key, us] of Object.entries(db.userSettings)) {
+    if (!us.synced) {
+      console.log(`Retrying sync for user settings: ${key}`);
+      const synced = await syncUserSettingsToSupabase(us);
+      if (synced) {
+        db.userSettings[key].synced = true;
         modified = true;
       }
     }

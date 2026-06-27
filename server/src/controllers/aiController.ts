@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getAllSessions, SessionData } from '../config/db.js';
+import { getAllSessions, SessionData, getGroup, getGroupMembers, getGroupTasks, getGroupGoals, getTaskAssignments } from '../config/db.js';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware.js';
 
 // Setup Gemini Client
@@ -210,3 +210,141 @@ Do not use placeholders. Give specific feedback based on the numbers. Write in a
     });
   }
 }
+
+// Heuristic engine to simulate AI insights for groups
+function generateGroupLocalHeuristics(groupName: string, members: any[], tasks: any[], goals: any[]): string {
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+  const todoTasks = tasks.filter(t => t.status === 'todo').length;
+  const overdueTasks = tasks.filter(t => t.status === 'overdue' || (t.status !== 'completed' && new Date(t.dueDate) < new Date())).length;
+  
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  
+  // Workload balance (active tasks per member)
+  const workload: Record<string, number> = {};
+  for (const m of members) {
+    workload[m.username] = 0;
+  }
+  for (const t of tasks) {
+    if (t.status !== 'completed') {
+      const assigns = getTaskAssignments(t.id);
+      for (const a of assigns) {
+        const u = a.username;
+        workload[u] = (workload[u] || 0) + 1;
+      }
+    }
+  }
+
+  let report = `### Team Productivity Report for "${groupName}"\n\n`;
+  report += `* **Task Completion Rate**: **${completionRate}%** (${completedTasks}/${totalTasks} tasks completed)\n`;
+  report += `* **Active Workload**: **${inProgressTasks}** in progress, **${todoTasks}** pending\n`;
+  report += `* **Overdue Warnings**: ⚠️ **${overdueTasks}** tasks are currently overdue!\n\n`;
+  
+  report += `### Workload Balance (Active Tasks):\n`;
+  for (const [user, count] of Object.entries(workload)) {
+    report += `- **${user}**: ${count} active task(s). `;
+    if (count > 5) {
+      report += `🚨 *Burnout Risk*: High volume of active tasks. Consider delegating to other members.`;
+    } else if (count === 0) {
+      report += `Idle status. Ready for next assignments.`;
+    } else {
+      report += `Balanced workload.`;
+    }
+    report += `\n`;
+  }
+  
+  report += `\n### Strategic Recommendations:\n`;
+  if (overdueTasks > 0) {
+    report += `1. **Address Overdue Backlog**: Prioritize resolving the ${overdueTasks} overdue tasks before kicking off new goals.\n`;
+  }
+  report += `2. **Milestone Review**: Focus on updating milestones for active goals. Ensure milestones are broken down into subtasks.\n`;
+  report += `3. **Daily Sync**: Schedule a short daily standup to address blockers and improve collaboration.`;
+  
+  return report;
+}
+
+export async function getGroupAiInsights(req: AuthenticatedRequest, res: Response) {
+  const { id } = req.params; // groupId
+  const username = req.user?.username;
+
+  if (!username) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const group = await getGroup(id);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const members = getGroupMembers(id);
+    const tasks = getGroupTasks(id);
+    const goals = getGroupGoals(id);
+
+    const model = initGeminiModel();
+
+    if (!model) {
+      const localInsights = generateGroupLocalHeuristics(group.name, members, tasks, goals);
+      return res.json({
+        insights: localInsights,
+        engine: 'local-heuristic'
+      });
+    }
+
+    // Build context payload for Gemini
+    let groupContext = `Group Name: ${group.name}
+Description: ${group.description}
+Total Members: ${members.length} (${members.map(m => `${m.username} [${m.role}]`).join(', ')})
+Total Goals: ${goals.length} (${goals.map(g => `Goal: ${g.title}, Deadline: ${g.deadline}, Progress: ${g.progress}%`).join('; ')})
+Tasks Context:
+`;
+
+    tasks.forEach(t => {
+      const assigns = getTaskAssignments(t.id).map(a => a.username).join(', ');
+      groupContext += `- Task: "${t.title}", Status: ${t.status}, Priority: ${t.priority}, Due: ${t.dueDate}, Assigned: [${assigns}]\n`;
+    });
+
+    const prompt = `
+You are an expert team optimization and workspace productivity coach analyzing team collaboration data.
+Analyze the following group context and compile a team performance report (in clean Markdown format).
+
+Team Workspace Context:
+${groupContext}
+
+Your report must include:
+1. **Weekly Team Report**: Summary of team accomplishments and goal progress.
+2. **Productivity Score**: Overall team efficiency rating based on task completion and deadline compliance.
+3. **Workload Balance**: Review of task distributions. Identify overload states or burnout risks.
+4. **Burnout Detection**: Specific warnings if members are overloaded with critical tasks.
+5. **Delayed Tasks Analysis**: Highlights of overdue tasks and blockers.
+6. **Recommendation Summary**: 3 actionable suggestions to improve team velocity, delegate tasks, and optimize workflows.
+
+Maintain a professional, clean, minimalistic tone.
+`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+
+    return res.json({
+      insights: responseText,
+      engine: 'gemini'
+    });
+  } catch (error) {
+    console.error('Group AI Insights error:', error);
+    try {
+      const group = await getGroup(id);
+      const members = getGroupMembers(id);
+      const tasks = getGroupTasks(id);
+      const goals = getGroupGoals(id);
+      const fallback = generateGroupLocalHeuristics(group?.name || 'Group', members, tasks, goals);
+      return res.json({
+        insights: fallback,
+        engine: 'local-heuristic-fallback'
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to generate group insights' });
+    }
+  }
+}
+

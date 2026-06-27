@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Key, ShieldCheck, Download, RefreshCw, Sun, Moon, Users, UserPlus } from 'lucide-react';
+import { Database, Key, ShieldCheck, Download, RefreshCw, Sun, Moon, Users, UserPlus, Mail, BellRing } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard.js';
 import { api } from '../api.js';
 
@@ -33,11 +33,84 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   const [usersList, setUsersList] = useState<any[]>([]);
   const [newUsername, setNewUsername] = useState('');
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newPasswordVal, setNewPasswordVal] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
+
+  // Profile and Email Notification States
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profileTimezone, setProfileTimezone] = useState('UTC');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [prefs, setPrefs] = useState({
+    receiveReminderEmails: true,
+    receiveTaskEmails: true,
+    receiveGoalEmails: true,
+    receiveWeeklyReports: true,
+    receiveAiReports: true,
+    receiveMarketingEmails: false,
+    enableDND: false,
+    quietHoursStart: '22:00',
+    quietHoursEnd: '08:00'
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
+
+  const fetchUserProfile = async () => {
+    try {
+      const data = await api.profile.get();
+      if (data && data.profile) {
+        setProfileName(data.profile.name || '');
+        setProfileEmail(data.profile.email || '');
+        setProfileTimezone(data.profile.timezone || 'UTC');
+        setEmailVerified(data.profile.emailVerified || false);
+      }
+      if (data && data.preferences) {
+        setPrefs(data.preferences);
+      }
+    } catch (err) {
+      console.error('Failed to load user profile:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSuccess('');
+    setProfileLoading(true);
+    try {
+      const res = await api.profile.update({
+        name: profileName,
+        email: profileEmail,
+        timezone: profileTimezone,
+        preferences: prefs
+      });
+      setProfileSuccess('Profile preferences updated successfully.');
+      if (res && res.profile) {
+        setEmailVerified(res.profile.emailVerified);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to update profile.');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    try {
+      await api.profile.verifyEmail();
+      setEmailVerified(true);
+      alert('Email verification mock successful! Reminder emails are now enabled.');
+    } catch (err: any) {
+      alert(err.message || 'Verification failed.');
+    }
+  };
 
   const fetchConfigStatus = async () => {
     if (role !== 'admin') return;
@@ -125,12 +198,14 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
       await api.admin.createUser({
         username: newUsername,
         name: newName || undefined,
+        email: newEmail || undefined,
         password: newPasswordVal,
         role: newRole
       });
       setCreateSuccess('User profile provisioned successfully.');
       setNewUsername('');
       setNewName('');
+      setNewEmail('');
       setNewPasswordVal('');
       setNewRole('user');
       fetchUsersDirectory(); // Refresh directory list
@@ -310,6 +385,126 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
           {/* Right Column: Authentication Credentials & Theme */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             
+            {/* User Profile & Email Notifications */}
+            <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.2rem', marginBottom: '0.25rem' }}>
+                <Mail size={18} style={{ color: 'var(--accent-primary)' }} /> Profile & Notifications
+              </h3>
+
+              <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Full Name</label>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      placeholder="Your name..."
+                      className="form-input"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Timezone</label>
+                    <select
+                      value={profileTimezone}
+                      onChange={(e) => setProfileTimezone(e.target.value)}
+                      className="form-input"
+                      style={{ background: 'var(--bg-input)', padding: '0.6rem' }}
+                    >
+                      <option value="UTC">UTC</option>
+                      <option value="America/New_York">EST/EDT (New York)</option>
+                      <option value="America/Los_Angeles">PST/PDT (Los Angeles)</option>
+                      <option value="Asia/Kolkata">IST (India)</option>
+                      <option value="Europe/London">GMT/BST (London)</option>
+                      <option value="Europe/Paris">CET/CEST (Paris)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Email Address</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="email"
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      placeholder="e.g. you@example.com"
+                      className="form-input"
+                      style={{ flex: 1 }}
+                    />
+                    {profileEmail && (
+                      emailVerified ? (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '6px 10px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-working)', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>Verified</span>
+                      ) : (
+                        <button type="button" onClick={handleVerifyEmail} className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--color-break)', border: '1px solid rgba(245,158,11,0.3)', cursor: 'pointer' }}>Verify</button>
+                      )
+                    )}
+                  </div>
+                  {!profileEmail && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Please add email to enable reminder messages.</div>}
+                  {profileEmail && !emailVerified && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Verify email before alerts will dispatch.</div>}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '0.6rem' }}>
+                  <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '4px' }}><BellRing size={14} /> Email Channels</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    {[
+                      { key: 'receiveReminderEmails', label: 'Reminders' },
+                      { key: 'receiveTaskEmails', label: 'Tasks Assigned' },
+                      { key: 'receiveGoalEmails', label: 'Goals Met' },
+                      { key: 'receiveWeeklyReports', label: 'Weekly Summary' },
+                      { key: 'receiveAiReports', label: 'Gemini reports' },
+                      { key: 'receiveMarketingEmails', label: 'SaaS Updates' }
+                    ].map(ch => (
+                      <label key={ch.key} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={(prefs as any)[ch.key]}
+                          onChange={(e) => setPrefs(prev => ({ ...prev, [ch.key]: e.target.checked }))}
+                        />
+                        {ch.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '0.6rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={prefs.enableDND}
+                      onChange={(e) => setPrefs(prev => ({ ...prev, enableDND: e.target.checked }))}
+                    />
+                    Quiet Hours (DND)
+                  </label>
+                  <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={prefs.quietHoursStart}
+                      onChange={(e) => setPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))}
+                      placeholder="22:00"
+                      style={{ width: '40px', padding: '2px 4px', fontSize: '0.7rem', textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: '0.7rem' }}>to</span>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={prefs.quietHoursEnd}
+                      onChange={(e) => setPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))}
+                      placeholder="08:00"
+                      style={{ width: '40px', padding: '2px 4px', fontSize: '0.7rem', textAlign: 'center' }}
+                    />
+                  </div>
+                </div>
+
+                {profileSuccess && <div style={{ fontSize: '0.75rem', color: 'var(--color-working)', fontWeight: 500 }}>{profileSuccess}</div>}
+
+                <button type="submit" disabled={profileLoading} className="btn-primary" style={{ padding: '0.6rem', fontSize: '0.8rem' }}>
+                  {profileLoading ? 'Saving Preferences...' : 'Save Profile Preferences'}
+                </button>
+              </form>
+            </GlassCard>
+
             {/* Security Password Changer */}
             <GlassCard>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.2rem', marginBottom: '1.25rem' }}>
@@ -432,7 +627,8 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border-glass)', textAlign: 'left', color: 'var(--text-tertiary)' }}>
                     <th style={{ padding: '0.75rem 0.5rem' }}>Name</th>
-                    <th style={{ padding: '0.75rem 0.5rem' }}>Username/Email</th>
+                    <th style={{ padding: '0.75rem 0.5rem' }}>Username</th>
+                    <th style={{ padding: '0.75rem 0.5rem' }}>Email Address</th>
                     <th style={{ padding: '0.75rem 0.5rem' }}>System Access Role</th>
                   </tr>
                 </thead>
@@ -441,6 +637,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }}>
                       <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{userObj.name}</td>
                       <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>{userObj.username}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>{userObj.email || '—'}</td>
                       <td style={{ padding: '0.75rem 0.5rem' }}>
                         <span 
                           style={{
@@ -497,6 +694,17 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. Alice Smith"
+                  className="form-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Email Address</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="e.g. alice@example.com"
                   className="form-input"
                 />
               </div>

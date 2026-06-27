@@ -269,7 +269,7 @@ export async function listUsers(req: AuthenticatedRequest, res: Response) {
 
 // Admin manual user provisioning
 export async function adminCreateUser(req: AuthenticatedRequest, res: Response) {
-  const { username, name, password, role } = req.body;
+  const { username, name, email, password, role } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
@@ -290,7 +290,8 @@ export async function adminCreateUser(req: AuthenticatedRequest, res: Response) 
       username: normUser,
       passwordHash: hash,
       role: role || 'user',
-      name: name || username
+      name: name || username,
+      email: email || undefined
     });
 
     return res.json({ 
@@ -298,7 +299,8 @@ export async function adminCreateUser(req: AuthenticatedRequest, res: Response) 
       user: { 
         username: newUser.username, 
         role: newUser.role, 
-        name: newUser.name 
+        name: newUser.name,
+        email: newUser.email
       } 
     });
   } catch (error) {

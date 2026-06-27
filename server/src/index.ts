@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
-import { initDb, isSupabaseConfigured, restoreFromSupabaseIfEmpty, retryUnsyncedData } from './config/db.js';
+import http from 'http';
+import { initDb, isSupabaseConfigured, restoreFromSupabaseIfEmpty, retryUnsyncedData, getGroupActivityLogs } from './config/db.js';
 import { authenticateToken, requireAdmin } from './middlewares/authMiddleware.js';
 import { login, changePassword, validateToken, signup, googleLogin, listUsers, adminCreateUser } from './controllers/authController.js';
 import {
@@ -21,7 +22,54 @@ import {
   getPlannerData,
   updatePlannerData
 } from './controllers/productivityController.js';
-import { getAiInsights } from './controllers/aiController.js';
+import { getAiInsights, getGroupAiInsights } from './controllers/aiController.js';
+import { initSocketServer } from './config/socket.js';
+import { startReminderEngine } from './services/reminderEngine.js';
+
+// New collaborative extension controllers
+import {
+  createGroup,
+  listGroups,
+  getGroupDetails,
+  joinGroup,
+  leaveGroup,
+  deleteGroupEndpoint,
+  transferOwnership,
+  listGroupMembers,
+  removeGroupMember,
+  updateGroupMemberRole
+} from './controllers/groupController.js';
+import {
+  createTask,
+  getTasksList,
+  getTaskDetails,
+  updateTask,
+  completeTask,
+  addTaskComment,
+  deleteTaskEndpoint
+} from './controllers/taskController.js';
+import {
+  createGoal,
+  listGoals,
+  updateGoal,
+  deleteGoalEndpoint
+} from './controllers/goalController.js';
+import {
+  createReminder,
+  listReminders,
+  deleteReminderEndpoint
+} from './controllers/reminderController.js';
+import {
+  listNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotificationEndpoint
+} from './controllers/notificationController.js';
+import {
+  getUserProfile,
+  updateUserProfile,
+  verifyEmail
+} from './controllers/userPreferencesController.js';
 
 dotenv.config();
 
@@ -82,6 +130,60 @@ app.post('/api/planner/:date', authenticateToken, updatePlannerData);
 
 // AI Insights Routes
 app.get('/api/ai/insights', authenticateToken, getAiInsights);
+app.get('/api/groups/:id/ai-insights', authenticateToken, getGroupAiInsights);
+
+// Collaborative Group / Workspace Routes
+app.post('/api/groups', authenticateToken, createGroup);
+app.get('/api/groups', authenticateToken, listGroups);
+app.post('/api/groups/join', authenticateToken, joinGroup);
+app.get('/api/groups/:id', authenticateToken, getGroupDetails);
+app.delete('/api/groups/:id', authenticateToken, deleteGroupEndpoint);
+app.post('/api/groups/:id/leave', authenticateToken, leaveGroup);
+app.post('/api/groups/:id/transfer', authenticateToken, transferOwnership);
+app.get('/api/groups/:id/members', authenticateToken, listGroupMembers);
+app.delete('/api/groups/:id/members/:memberUsername', authenticateToken, removeGroupMember);
+app.put('/api/groups/:id/members/:memberUsername/role', authenticateToken, updateGroupMemberRole);
+app.get('/api/groups/:id/activity', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const logs = getGroupActivityLogs(id);
+    logs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return res.json({ activity: logs });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to retrieve activity feed' });
+  }
+});
+
+// Shared Task Routes
+app.post('/api/tasks', authenticateToken, createTask);
+app.get('/api/tasks', authenticateToken, getTasksList);
+app.get('/api/tasks/:id', authenticateToken, getTaskDetails);
+app.put('/api/tasks/:id', authenticateToken, updateTask);
+app.put('/api/tasks/:id/complete', authenticateToken, completeTask);
+app.post('/api/tasks/:id/comments', authenticateToken, addTaskComment);
+app.delete('/api/tasks/:id', authenticateToken, deleteTaskEndpoint);
+
+// Goals Routes
+app.post('/api/goals', authenticateToken, createGoal);
+app.get('/api/goals', authenticateToken, listGoals);
+app.put('/api/goals/:id', authenticateToken, updateGoal);
+app.delete('/api/goals/:id', authenticateToken, deleteGoalEndpoint);
+
+// Reminders Routes
+app.post('/api/reminders', authenticateToken, createReminder);
+app.get('/api/reminders', authenticateToken, listReminders);
+app.delete('/api/reminders/:id', authenticateToken, deleteReminderEndpoint);
+
+// Notifications Routes
+app.get('/api/notifications', authenticateToken, listNotifications);
+app.post('/api/notifications/read-all', authenticateToken, markAllNotificationsRead);
+app.put('/api/notifications/:id/read', authenticateToken, markNotificationRead);
+app.delete('/api/notifications/:id', authenticateToken, deleteNotificationEndpoint);
+
+// User Profile & Preferences Routes
+app.get('/api/users/profile', authenticateToken, getUserProfile);
+app.put('/api/users/profile', authenticateToken, updateUserProfile);
+app.post('/api/users/profile/verify-email', authenticateToken, verifyEmail);
 
 // Configuration Status Routes
 app.get('/api/settings/status', authenticateToken, requireAdmin, (req, res) => {
@@ -111,9 +213,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: 'An unexpected server error occurred' });
 });
 
+const server = http.createServer(app);
+initSocketServer(server);
+startReminderEngine();
+
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Office Hours Tracker backend server running on port ${PORT}`);
+  server.listen(PORT, () => {
+    console.log(`Zenith Focus backend server running on port ${PORT}`);
   });
 }
 

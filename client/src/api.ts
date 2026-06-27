@@ -96,6 +96,10 @@ export const api = {
     createUser: (userData: { username: string; name?: string; email?: string; password: string; role: 'admin' | 'user' }) => request('/admin/users', {
       method: 'POST',
       body: JSON.stringify(userData)
+    }),
+    updateUser: (username: string, userData: { name?: string; email?: string; role?: 'admin' | 'user' }) => request(`/admin/users/${username}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData)
     })
   },
   groups: {

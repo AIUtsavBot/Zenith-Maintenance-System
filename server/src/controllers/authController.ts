@@ -309,6 +309,43 @@ export async function adminCreateUser(req: AuthenticatedRequest, res: Response) 
   }
 }
 
+export async function adminUpdateUser(req: AuthenticatedRequest, res: Response) {
+  const { username } = req.params;
+  const { name, email, role } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ error: 'Username parameter is required' });
+  }
+
+  try {
+    const normUser = username.toLowerCase().trim();
+    const userObj = await getUser(normUser);
+
+    if (!userObj) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (name !== undefined) userObj.name = name;
+    if (email !== undefined) userObj.email = email;
+    if (role !== undefined) userObj.role = role;
+
+    await saveUser(normUser, userObj);
+
+    return res.json({ 
+      message: 'User updated successfully', 
+      user: { 
+        username: userObj.username, 
+        role: userObj.role, 
+        name: userObj.name,
+        email: userObj.email
+      } 
+    });
+  } catch (error) {
+    console.error('Admin update user error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 export function validateToken(req: AuthenticatedRequest, res: Response) {
   return res.json({ 
     valid: true, 

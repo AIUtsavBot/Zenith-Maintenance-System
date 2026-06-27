@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { initDb, isSupabaseConfigured, restoreFromSupabaseIfEmpty, retryUnsyncedData, getGroupActivityLogs } from './config/db.js';
 import { authenticateToken, requireAdmin } from './middlewares/authMiddleware.js';
-import { login, changePassword, validateToken, signup, googleLogin, listUsers, adminCreateUser } from './controllers/authController.js';
+import { login, changePassword, validateToken, signup, googleLogin, listUsers, adminCreateUser, adminUpdateUser } from './controllers/authController.js';
 import {
   getCurrentSession,
   startWork,
@@ -109,6 +109,7 @@ app.get('/api/auth/validate', authenticateToken, validateToken);
 // User Management (Admin-only)
 app.get('/api/admin/users', authenticateToken, requireAdmin, listUsers);
 app.post('/api/admin/users', authenticateToken, requireAdmin, adminCreateUser);
+app.put('/api/admin/users/:username', authenticateToken, requireAdmin, adminUpdateUser);
 
 // Work Session Tracking Routes
 app.get('/api/session/current', authenticateToken, getCurrentSession);

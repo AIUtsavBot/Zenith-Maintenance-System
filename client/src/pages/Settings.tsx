@@ -40,6 +40,13 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   const [createSuccess, setCreateSuccess] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
 
+  // User edit state
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [editLoading, setEditLoading] = useState(false);
+
   // Profile and Email Notification States
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -213,6 +220,23 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
       setCreateError(err.message || 'Failed to provision user profile.');
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleUpdateUserSubmit = async (username: string) => {
+    setEditLoading(true);
+    try {
+      await api.admin.updateUser(username, {
+        name: editName,
+        email: editEmail,
+        role: editRole
+      });
+      setEditingUser(null);
+      fetchUsersDirectory();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update user details.');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -630,35 +654,108 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                     <th style={{ padding: '0.75rem 0.5rem' }}>Username</th>
                     <th style={{ padding: '0.75rem 0.5rem' }}>Email Address</th>
                     <th style={{ padding: '0.75rem 0.5rem' }}>System Access Role</th>
+                    <th style={{ padding: '0.75rem 0.5rem' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {usersList.map((userObj, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                      <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{userObj.name}</td>
-                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>{userObj.username}</td>
-                      <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>{userObj.email || '—'}</td>
-                      <td style={{ padding: '0.75rem 0.5rem' }}>
-                        <span 
-                          style={{
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
-                            padding: '0.2rem 0.5rem',
-                            borderRadius: '4px',
-                            background: userObj.role === 'admin' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-                            color: userObj.role === 'admin' ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                            border: '1px solid var(--border-glass)',
-                            textTransform: 'uppercase'
-                          }}
-                        >
-                          {userObj.role}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {usersList.map((userObj, idx) => {
+                    const isEditing = editingUser?.username === userObj.username;
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                        <td style={{ padding: '0.75rem 0.5rem' }}>
+                          {isEditing ? (
+                            <input 
+                              type="text" 
+                              value={editName} 
+                              onChange={e => setEditName(e.target.value)} 
+                              className="form-input" 
+                              style={{ padding: '2px 6px', fontSize: '0.8rem' }}
+                            />
+                          ) : (
+                            <span style={{ fontWeight: 600 }}>{userObj.name}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>
+                          {userObj.username}
+                        </td>
+                        <td style={{ padding: '0.75rem 0.5rem' }}>
+                          {isEditing ? (
+                            <input 
+                              type="email" 
+                              value={editEmail} 
+                              onChange={e => setEditEmail(e.target.value)} 
+                              className="form-input" 
+                              style={{ padding: '2px 6px', fontSize: '0.8rem' }}
+                            />
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)' }}>{userObj.email || '—'}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 0.5rem' }}>
+                          {isEditing ? (
+                            <select 
+                              value={editRole} 
+                              onChange={e => setEditRole(e.target.value as any)}
+                              className="form-input" 
+                              style={{ padding: '2px 6px', fontSize: '0.8rem', background: 'var(--bg-input)' }}
+                            >
+                              <option value="user">User</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          ) : (
+                            <span 
+                              style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '4px',
+                                background: userObj.role === 'admin' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                                color: userObj.role === 'admin' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                                border: '1px solid var(--border-glass)',
+                                textTransform: 'uppercase'
+                              }}
+                            >
+                              {userObj.role}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 0.5rem' }}>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button 
+                                onClick={() => handleUpdateUserSubmit(userObj.username)}
+                                disabled={editLoading}
+                                style={{ border: 'none', background: 'var(--color-working)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                              >
+                                {editLoading ? 'Saving...' : 'Save'}
+                              </button>
+                              <button 
+                                onClick={() => setEditingUser(null)}
+                                style={{ border: 'none', background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                setEditingUser(userObj);
+                                setEditName(userObj.name || '');
+                                setEditEmail(userObj.email || '');
+                                setEditRole(userObj.role);
+                              }}
+                              style={{ border: 'none', background: 'rgba(168,85,247,0.1)', color: 'var(--accent-primary)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {usersList.length === 0 && (
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-tertiary)' }}>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-tertiary)' }}>
                         No members provisioned yet.
                       </td>
                     </tr>

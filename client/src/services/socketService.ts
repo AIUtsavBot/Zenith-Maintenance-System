@@ -15,11 +15,19 @@ export function initSocketConnection(onEvent?: (event: string, data: any) => voi
   if (!token) return null;
 
   // Derive Socket server URL: if front-end is on port 5173, backend is on port 5000
-  const socketUrl = import.meta.env.VITE_API_URL || (
-    window.location.port === '5173' 
-      ? 'http://localhost:5000' 
-      : ''
-  );
+  let socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL || '';
+  
+  if (!socketUrl) {
+    if (window.location.port === '5173') {
+      socketUrl = 'http://localhost:5000';
+    } else if (window.location.hostname.includes('vercel.app')) {
+      socketUrl = 'https://zenith-maintenance-system.onrender.com';
+    }
+  }
+
+  if (socketUrl.endsWith('/api')) {
+    socketUrl = socketUrl.slice(0, -4);
+  }
 
   socket = io(socketUrl, {
     auth: { token },

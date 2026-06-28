@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || (
+export const API_URL = import.meta.env.VITE_API_URL || (
   window.location.port === '5173' 
     ? 'http://localhost:5000/api' 
     : '/api'
@@ -187,5 +187,8 @@ export const api = {
       body: JSON.stringify(data)
     }),
     verifyEmail: () => request('/users/profile/verify-email', { method: 'POST' })
+  },
+  settings: {
+    getStatus: () => request('/settings/status')
   }
 };

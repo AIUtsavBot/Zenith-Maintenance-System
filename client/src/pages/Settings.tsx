@@ -123,15 +123,8 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
     if (role !== 'admin') return;
     setStatusLoading(true);
     try {
-      const configRes = await fetch('http://localhost:5000/api/settings/status', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('zenith_auth_token')}`
-        }
-      });
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        setDbStatus(configData);
-      }
+      const configData = await api.settings.getStatus();
+      setDbStatus(configData);
     } catch (err) {
       console.error('Failed to get configuration status:', err);
     } finally {
@@ -240,22 +233,16 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
     }
   };
 
-  const handleExportBackup = () => {
+  const handleExportBackup = async () => {
     try {
-      const token = localStorage.getItem('zenith_auth_token');
-      fetch('http://localhost:5000/api/productivity/history', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(data => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `zenith_focus_backup_${new Date().toISOString().split('T')[0]}.json`);
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-      });
+      const data = await api.productivity.getHistory();
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `zenith_focus_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
     } catch (err) {
       alert('Failed to generate export backup.');
     }

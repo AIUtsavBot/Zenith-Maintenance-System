@@ -6,6 +6,9 @@ import {
   getEmailPreferences, 
   saveEmailPreferences 
 } from '../config/db.js';
+import { sendVerificationOtp } from '../services/emailService.js';
+
+const verificationOtps = new Map<string, { otp: string; expires: number }>();
 
 export async function getUserProfile(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
@@ -131,6 +134,7 @@ export async function updateUserProfile(req: AuthenticatedRequest, res: Response
 
 export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
+  const { otp } = req.body;
 
   if (!username) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -146,24 +150,63 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ error: 'Please add an email address first before verification' });
     }
 
-    // In a production environment, this would verify a code sent to the email.
-    // For development and testing, we automatically verify the email upon request.
-    user.emailVerified = true;
-    await saveUser(username, user);
+    const normalizedUser = username.toLowerCase();
 
-    return res.json({ 
-      message: 'Email successfully verified!', 
-      profile: {
-        username: user.username,
-        name: user.name || user.username,
-        email: user.email,
-        timezone: user.timezone,
-        emailVerified: true,
-        role: user.role
+    // If OTP is provided, perform validation
+    if (otp !== undefined) {
+      const activeOtp = verificationOtps.get(normalizedUser);
+      if (!activeOtp) {
+        return res.status(400).json({ error: 'No verification request active. Please request a new code.' });
       }
+
+      if (Date.now() > activeOtp.expires) {
+        verificationOtps.delete(normalizedUser);
+        return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+      }
+
+      if (activeOtp.otp !== otp.trim()) {
+        return res.status(400).json({ error: 'Incorrect verification code. Please try again.' });
+      }
+
+      // Valid OTP: set email as verified
+      user.emailVerified = true;
+      await saveUser(username, user);
+      
+      // Clean up the map
+      verificationOtps.delete(normalizedUser);
+
+      return res.json({ 
+        status: 'verified',
+        message: 'Email successfully verified!', 
+        profile: {
+          username: user.username,
+          name: user.name || user.username,
+          email: user.email,
+          timezone: user.timezone || 'UTC',
+          emailVerified: true,
+          role: user.role
+        }
+      });
+    }
+
+    // If OTP is NOT provided, generate and send a new OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    verificationOtps.set(normalizedUser, {
+      otp: generatedOtp,
+      expires: Date.now() + 10 * 60 * 1000 // 10 minutes expiration
+    });
+
+    const emailSent = await sendVerificationOtp(user.username, user.email, generatedOtp);
+    if (!emailSent) {
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+
+    return res.json({
+      status: 'pending',
+      message: 'A verification code (OTP) has been sent to your email.'
     });
   } catch (error) {
     console.error('Verify email error:', error);
-    return res.status(500).json({ error: 'Failed to verify email' });
+    return res.status(500).json({ error: 'Failed to process email verification' });
   }
 }

@@ -249,7 +249,6 @@ export async function changePassword(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-// List all registered users (Admin-only)
 export async function listUsers(req: AuthenticatedRequest, res: Response) {
   try {
     await seedDefaultUsers();
@@ -258,7 +257,8 @@ export async function listUsers(req: AuthenticatedRequest, res: Response) {
     const sanitized = users.map(u => ({
       username: u.username,
       name: u.name || u.username,
-      role: u.role
+      role: u.role,
+      email: u.email || ''
     }));
     return res.json({ users: sanitized });
   } catch (error) {

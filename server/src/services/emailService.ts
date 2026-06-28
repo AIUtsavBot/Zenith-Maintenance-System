@@ -226,3 +226,31 @@ export function getEmailTemplate(title: string, bodyContent: string): string {
     </html>
   `;
 }
+
+export async function sendVerificationOtp(username: string, email: string, otp: string): Promise<boolean> {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_FROM || '"Zenith Focus" <noreply@zenithfocus.app>',
+      to: email,
+      subject: 'Verify your Zenith Focus email address',
+      html: getEmailTemplate(
+        'Verify your email',
+        `<p>Hello ${username},</p>
+         <p>Thank you for registering your email address with Zenith Focus.</p>
+         <p>Please use the following One-Time Password (OTP) to verify your email address:</p>
+         <div style="background-color: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 4px; border: 1px solid rgba(255,255,255,0.1); margin: 20px 0; color: #ffffff;">
+           ${otp}
+         </div>
+         <p>This code will expire in 10 minutes.</p>
+         <p>If you did not request this, you can safely ignore this email.</p>`
+      ),
+      text: `Hello ${username},\n\nYour OTP for email verification is: ${otp}\n\nThis code will expire in 10 minutes.`
+    });
+    console.log(`Verification OTP email sent successfully to ${email}: ${info.messageId}`);
+    return true;
+  } catch (err) {
+    console.error(`Error sending verification OTP to ${username} (${email}):`, err);
+    return false;
+  }
+}
+

@@ -57,6 +57,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   const [otpError, setOtpError] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpSuccess, setOtpSuccess] = useState('');
+  const [fallbackOtp, setFallbackOtp] = useState('');
   const [prefs, setPrefs] = useState({
     receiveReminderEmails: true,
     receiveTaskEmails: true,
@@ -118,9 +119,13 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
     setOtpError('');
     setOtpSuccess('');
     setOtpValue('');
+    setFallbackOtp('');
     try {
       const res = await api.profile.verifyEmail();
       if (res && res.status === 'pending') {
+        if (res.otp) {
+          setFallbackOtp(res.otp);
+        }
         setShowOtpModal(true);
       } else {
         alert(res?.message || 'Verification initiated.');
@@ -892,6 +897,21 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               A 6-digit verification code has been sent to <strong>{profileEmail}</strong>. Please enter the code below to verify your email.
             </p>
+
+            {fallbackOtp && (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                color: '#93c5fd',
+                textAlign: 'center',
+                lineHeight: 1.4
+              }}>
+                ℹ️ SMTP is not configured. Use the testing code: <strong>{fallbackOtp}</strong>
+              </div>
+            )}
 
             <form onSubmit={handleConfirmOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

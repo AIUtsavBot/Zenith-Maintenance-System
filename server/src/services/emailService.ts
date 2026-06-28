@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 import { getEmailPreferences, getUser } from '../config/db.js';
 
+export function isSmtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
 // Setup email transporter. Uses SMTP settings from env if available, otherwise falls back to console logging.
 const createTransporter = () => {
   const host = process.env.SMTP_HOST;

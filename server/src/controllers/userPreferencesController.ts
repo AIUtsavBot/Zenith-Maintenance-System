@@ -6,7 +6,7 @@ import {
   getEmailPreferences, 
   saveEmailPreferences 
 } from '../config/db.js';
-import { sendVerificationOtp } from '../services/emailService.js';
+import { sendVerificationOtp, isSmtpConfigured } from '../services/emailService.js';
 
 const verificationOtps = new Map<string, { otp: string; expires: number }>();
 
@@ -201,10 +201,16 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
       return res.status(500).json({ error: 'Failed to send verification email' });
     }
 
-    return res.json({
+    const payload: any = {
       status: 'pending',
       message: 'A verification code (OTP) has been sent to your email.'
-    });
+    };
+
+    if (!isSmtpConfigured()) {
+      payload.otp = generatedOtp;
+    }
+
+    return res.json(payload);
   } catch (error) {
     console.error('Verify email error:', error);
     return res.status(500).json({ error: 'Failed to process email verification' });

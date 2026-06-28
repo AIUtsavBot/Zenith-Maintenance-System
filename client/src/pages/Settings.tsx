@@ -52,13 +52,11 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   const [profileEmail, setProfileEmail] = useState('');
   const [profileTimezone, setProfileTimezone] = useState('UTC');
   const [emailVerified, setEmailVerified] = useState(false);
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpSuccess, setOtpSuccess] = useState('');
-  const [fallbackOtp, setFallbackOtp] = useState('');
-  const [otpWarning, setOtpWarning] = useState('');
+  const [savedEmail, setSavedEmail] = useState('');
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifySuccess, setVerifySuccess] = useState('');
+  const [verifyError, setVerifyError] = useState('');
   const [prefs, setPrefs] = useState({
     receiveReminderEmails: true,
     receiveTaskEmails: true,
@@ -79,6 +77,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
       if (data && data.profile) {
         setProfileName(data.profile.name || '');
         setProfileEmail(data.profile.email || '');
+        setSavedEmail(data.profile.email || '');
         setProfileTimezone(data.profile.timezone || 'UTC');
         setEmailVerified(data.profile.emailVerified || false);
       }
@@ -101,7 +100,6 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
     try {
       const res = await api.profile.update({
         name: profileName,
-        email: profileEmail,
         timezone: profileTimezone,
         preferences: prefs
       });
@@ -117,64 +115,43 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   };
 
   const handleVerifyEmail = async () => {
-    setOtpError('');
-    setOtpSuccess('');
-    setOtpValue('');
-    setFallbackOtp('');
-    setOtpWarning('');
-    
     if (!profileEmail.trim()) {
       alert('Please enter a valid email address first.');
       return;
     }
+    setVerifyError('');
+    setVerifySuccess('');
+    setShowVerifyModal(true);
+  };
 
+  const handleConfirmVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifyLoading(true);
+    setVerifyError('');
+    setVerifySuccess('');
     try {
-      // Auto-save non-email details to the backend database
+      // Auto-save non-email details to the backend database first
       await api.profile.update({
         name: profileName,
         timezone: profileTimezone,
         preferences: prefs
       });
 
-      // Request verification OTP for the new email address directly
+      // Request verification & save of the new email address
       const res = await api.profile.verifyEmail({ email: profileEmail.trim() });
-      if (res && res.status === 'pending') {
-        if (res.otp) {
-          setFallbackOtp(res.otp);
-        }
-        if (res.warning) {
-          setOtpWarning(res.warning);
-        }
-        setShowOtpModal(true);
-      } else {
-        alert(res?.message || 'Verification initiated.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Failed to initiate verification.');
-    }
-  };
-
-  const handleConfirmOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpValue || otpValue.trim().length !== 6) {
-      setOtpError('Please enter a valid 6-digit code.');
-      return;
-    }
-    setOtpLoading(true);
-    setOtpError('');
-    try {
-      const res = await api.profile.verifyEmail({ otp: otpValue.trim() });
       if (res && res.status === 'verified') {
         setEmailVerified(true);
-        setOtpSuccess('Email verified successfully!');
+        setSavedEmail(res.profile.email);
+        setProfileEmail(res.profile.email);
+        setVerifySuccess('Email verified and saved successfully!');
         setTimeout(() => {
-          setShowOtpModal(false);
+          setShowVerifyModal(false);
         }, 1500);
       }
     } catch (err: any) {
-      setOtpError(err.message || 'Verification failed. Please check the code and try again.');
+      setVerifyError(err.message || 'Verification failed. Please try again.');
     } finally {
-      setOtpLoading(false);
+      setVerifyLoading(false);
     }
   };
 
@@ -502,16 +479,16 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                       className="form-input"
                       style={{ flex: 1 }}
                     />
-                    {profileEmail && (
-                      emailVerified ? (
+                    {profileEmail.trim() && (
+                      (emailVerified && profileEmail.trim() === savedEmail) ? (
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '6px 10px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-working)', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>Verified</span>
                       ) : (
                         <button type="button" onClick={handleVerifyEmail} className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--color-break)', border: '1px solid rgba(245,158,11,0.3)', cursor: 'pointer' }}>Verify</button>
                       )
                     )}
                   </div>
-                  {!profileEmail && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Please add email to enable reminder messages.</div>}
-                  {profileEmail && !emailVerified && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Verify email before alerts will dispatch.</div>}
+                  {!profileEmail.trim() && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Please add email to enable reminder messages.</div>}
+                  {profileEmail.trim() && (profileEmail.trim() !== savedEmail || !emailVerified) && <div style={{ fontSize: '0.65rem', color: '#fbbf24' }}>⚠️ Verify email to save and enable alerts.</div>}
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '0.6rem' }}>
@@ -888,7 +865,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
         </div>
       )}
 
-      {showOtpModal && (
+      {showVerifyModal && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -904,9 +881,9 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
         }}>
           <GlassCard style={{ width: '400px', display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Email Verification</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Confirm Email Verification</h3>
               <button 
-                onClick={() => setShowOtpModal(false)}
+                onClick={() => setShowVerifyModal(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', fontSize: '1.2rem', cursor: 'pointer' }}
               >
                 &times;
@@ -914,62 +891,17 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
             </div>
             
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              A 6-digit verification code has been sent to <strong>{profileEmail}</strong>. Please enter the code below to verify your email.
+              Would you like to verify and set <strong>{profileEmail}</strong> as your verified notification email address?
             </p>
 
-            {fallbackOtp && (
-              <div style={{
-                background: otpWarning ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                border: `1px solid ${otpWarning ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.8rem',
-                color: otpWarning ? '#fca5a5' : '#93c5fd',
-                textAlign: 'center',
-                lineHeight: 1.4
-              }}>
-                {otpWarning ? (
-                  <>
-                    ⚠️ <strong>SMTP Error:</strong> {otpWarning}
-                    <br />
-                    Use testing code: <strong>{fallbackOtp}</strong>
-                  </>
-                ) : (
-                  <>ℹ️ SMTP is not configured. Use testing code: <strong>{fallbackOtp}</strong></>
-                )}
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={otpValue}
-                  onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter 6-digit OTP"
-                  style={{
-                    padding: '0.8rem',
-                    textAlign: 'center',
-                    fontSize: '1.5rem',
-                    letterSpacing: '8px',
-                    fontWeight: 'bold',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                  required
-                />
-              </div>
-
-              {otpError && <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 500, textAlign: 'center' }}>{otpError}</div>}
-              {otpSuccess && <div style={{ fontSize: '0.8rem', color: 'var(--color-working)', fontWeight: 500, textAlign: 'center' }}>{otpSuccess}</div>}
+            <form onSubmit={handleConfirmVerification} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {verifyError && <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 500, textAlign: 'center' }}>{verifyError}</div>}
+              {verifySuccess && <div style={{ fontSize: '0.8rem', color: 'var(--color-working)', fontWeight: 500, textAlign: 'center' }}>{verifySuccess}</div>}
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <button 
                   type="button" 
-                  onClick={() => setShowOtpModal(false)}
+                  onClick={() => setShowVerifyModal(false)}
                   className="btn-secondary" 
                   style={{ flex: 1 }}
                 >
@@ -977,18 +909,14 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
                 </button>
                 <button 
                   type="submit" 
-                  disabled={otpLoading || otpValue.length !== 6}
+                  disabled={verifyLoading}
                   className="btn-primary" 
                   style={{ flex: 1 }}
                 >
-                  {otpLoading ? 'Verifying...' : 'Verify Code'}
+                  {verifyLoading ? 'Verifying...' : 'Confirm Verification'}
                 </button>
               </div>
             </form>
-            
-            <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Didn't receive a code? <span onClick={handleVerifyEmail} style={{ color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: 600 }}>Resend code</span>
-            </div>
           </GlassCard>
         </div>
       )}

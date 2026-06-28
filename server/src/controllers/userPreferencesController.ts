@@ -6,9 +6,6 @@ import {
   getEmailPreferences, 
   saveEmailPreferences 
 } from '../config/db.js';
-import { sendVerificationOtp, isSmtpConfigured } from '../services/emailService.js';
-
-const pendingVerifications = new Map<string, { email: string; otp: string; expires: number }>();
 
 export async function getUserProfile(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
@@ -131,10 +128,14 @@ export async function updateUserProfile(req: AuthenticatedRequest, res: Response
 
 export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
-  const { otp, email } = req.body;
+  const { email } = req.body;
 
   if (!username) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'Email address is required' });
   }
 
   try {
@@ -143,74 +144,23 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const normalizedUser = username.toLowerCase();
+    // Set email and mark as verified in database now
+    user.email = email.trim();
+    user.emailVerified = true;
+    await saveUser(username, user);
 
-    // If OTP is provided, perform validation
-    if (otp !== undefined) {
-      const activeVerification = pendingVerifications.get(normalizedUser);
-      if (!activeVerification) {
-        return res.status(400).json({ error: 'No verification request active. Please request a new code.' });
+    return res.json({ 
+      status: 'verified',
+      message: 'Email successfully verified and updated!', 
+      profile: {
+        username: user.username,
+        name: user.name || user.username,
+        email: user.email,
+        timezone: user.timezone || 'UTC',
+        emailVerified: true,
+        role: user.role
       }
-
-      if (Date.now() > activeVerification.expires) {
-        pendingVerifications.delete(normalizedUser);
-        return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
-      }
-
-      if (activeVerification.otp !== otp.trim()) {
-        return res.status(400).json({ error: 'Incorrect verification code. Please try again.' });
-      }
-
-      // Valid OTP: set email and mark as verified in database now
-      user.email = activeVerification.email;
-      user.emailVerified = true;
-      await saveUser(username, user);
-      
-      // Clean up the map
-      pendingVerifications.delete(normalizedUser);
-
-      return res.json({ 
-        status: 'verified',
-        message: 'Email successfully verified and updated!', 
-        profile: {
-          username: user.username,
-          name: user.name || user.username,
-          email: user.email,
-          timezone: user.timezone || 'UTC',
-          emailVerified: true,
-          role: user.role
-        }
-      });
-    }
-
-    // If OTP is NOT provided, generate and send a new OTP for the proposed email
-    const targetEmail = email || user.email;
-    if (!targetEmail) {
-      return res.status(400).json({ error: 'Please enter a valid email address first.' });
-    }
-
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    pendingVerifications.set(normalizedUser, {
-      email: targetEmail.trim(),
-      otp: generatedOtp,
-      expires: Date.now() + 10 * 60 * 1000 // 10 minutes expiration
     });
-
-    const emailSent = await sendVerificationOtp(user.username, targetEmail.trim(), generatedOtp);
-
-    const payload: any = {
-      status: 'pending',
-      message: 'A verification code (OTP) has been sent to your email.'
-    };
-
-    if (!emailSent || !isSmtpConfigured()) {
-      payload.otp = generatedOtp;
-      if (!emailSent && isSmtpConfigured()) {
-        payload.warning = 'SMTP host was unreachable or authentication failed. Check credentials.';
-      }
-    }
-
-    return res.json(payload);
   } catch (error) {
     console.error('Verify email error:', error);
     return res.status(500).json({ error: 'Failed to process email verification' });

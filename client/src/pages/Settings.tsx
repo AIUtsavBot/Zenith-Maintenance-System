@@ -120,7 +120,21 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
     setOtpSuccess('');
     setOtpValue('');
     setFallbackOtp('');
+    
+    if (!profileEmail.trim()) {
+      alert('Please enter a valid email address first.');
+      return;
+    }
+
     try {
+      // Auto-save the email to the backend database first so it's not empty
+      await api.profile.update({
+        name: profileName,
+        email: profileEmail.trim(),
+        timezone: profileTimezone,
+        preferences: prefs
+      });
+
       const res = await api.profile.verifyEmail();
       if (res && res.status === 'pending') {
         if (res.otp) {

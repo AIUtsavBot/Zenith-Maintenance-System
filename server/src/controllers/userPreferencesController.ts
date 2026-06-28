@@ -8,7 +8,7 @@ import {
 } from '../config/db.js';
 import { sendVerificationOtp, isSmtpConfigured } from '../services/emailService.js';
 
-const verificationOtps = new Map<string, { otp: string; expires: number }>();
+const pendingVerifications = new Map<string, { email: string; otp: string; expires: number }>();
 
 export async function getUserProfile(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
@@ -75,11 +75,8 @@ export async function updateUserProfile(req: AuthenticatedRequest, res: Response
     if (name !== undefined) user.name = name;
     if (timezone !== undefined) user.timezone = timezone;
 
-    // Handle email change and reset verification status if changed
-    if (email !== undefined && email !== user.email) {
-      user.email = email.trim();
-      user.emailVerified = false; // Reset verification on change
-    }
+    // We do NOT update the email here directly anymore.
+    // Email updates must go through the verification flow (verify-email OTP) to ensure it is verified before saving to the DB.
 
     await saveUser(username, user);
 
@@ -134,7 +131,7 @@ export async function updateUserProfile(req: AuthenticatedRequest, res: Response
 
 export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
   const username = req.user?.username;
-  const { otp } = req.body;
+  const { otp, email } = req.body;
 
   if (!username) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -146,38 +143,35 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (!user.email) {
-      return res.status(400).json({ error: 'Please add an email address first before verification' });
-    }
-
     const normalizedUser = username.toLowerCase();
 
     // If OTP is provided, perform validation
     if (otp !== undefined) {
-      const activeOtp = verificationOtps.get(normalizedUser);
-      if (!activeOtp) {
+      const activeVerification = pendingVerifications.get(normalizedUser);
+      if (!activeVerification) {
         return res.status(400).json({ error: 'No verification request active. Please request a new code.' });
       }
 
-      if (Date.now() > activeOtp.expires) {
-        verificationOtps.delete(normalizedUser);
+      if (Date.now() > activeVerification.expires) {
+        pendingVerifications.delete(normalizedUser);
         return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
       }
 
-      if (activeOtp.otp !== otp.trim()) {
+      if (activeVerification.otp !== otp.trim()) {
         return res.status(400).json({ error: 'Incorrect verification code. Please try again.' });
       }
 
-      // Valid OTP: set email as verified
+      // Valid OTP: set email and mark as verified in database now
+      user.email = activeVerification.email;
       user.emailVerified = true;
       await saveUser(username, user);
       
       // Clean up the map
-      verificationOtps.delete(normalizedUser);
+      pendingVerifications.delete(normalizedUser);
 
       return res.json({ 
         status: 'verified',
-        message: 'Email successfully verified!', 
+        message: 'Email successfully verified and updated!', 
         profile: {
           username: user.username,
           name: user.name || user.username,
@@ -189,14 +183,20 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    // If OTP is NOT provided, generate and send a new OTP
+    // If OTP is NOT provided, generate and send a new OTP for the proposed email
+    const targetEmail = email || user.email;
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'Please enter a valid email address first.' });
+    }
+
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    verificationOtps.set(normalizedUser, {
+    pendingVerifications.set(normalizedUser, {
+      email: targetEmail.trim(),
       otp: generatedOtp,
       expires: Date.now() + 10 * 60 * 1000 // 10 minutes expiration
     });
 
-    const emailSent = await sendVerificationOtp(user.username, user.email, generatedOtp);
+    const emailSent = await sendVerificationOtp(user.username, targetEmail.trim(), generatedOtp);
 
     const payload: any = {
       status: 'pending',

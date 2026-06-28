@@ -437,6 +437,253 @@ export async function restoreFromSupabaseIfEmpty() {
       }
     }
 
+    // 4. Restore Groups if empty
+    const hasGroups = Object.keys(db.groups).length > 0;
+    if (!hasGroups) {
+      console.log('Local groups DB is empty. Attempting to restore groups from Supabase...');
+      const { data: dbGroups, error: groupsErr } = await supabase
+        .from('groups')
+        .select('*');
+
+      if (groupsErr) {
+        console.error('Failed to retrieve groups from Supabase:', groupsErr);
+      } else if (dbGroups && dbGroups.length > 0) {
+        const groups: Record<string, Group> = {};
+        for (const row of dbGroups) {
+          groups[row.id] = {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            avatar: row.avatar,
+            inviteCode: row.invite_code,
+            owner: row.owner,
+            createdAt: row.created_at,
+            settings: row.settings,
+            synced: true
+          };
+        }
+        db.groups = groups;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(groups).length} groups from Supabase.`);
+      }
+    }
+
+    // 5. Restore Members if empty
+    const hasMembers = Object.keys(db.members).length > 0;
+    if (!hasMembers) {
+      console.log('Local members DB is empty. Attempting to restore members from Supabase...');
+      const { data: dbMembers, error: membersErr } = await supabase
+        .from('members')
+        .select('*');
+
+      if (membersErr) {
+        console.error('Failed to retrieve members from Supabase:', membersErr);
+      } else if (dbMembers && dbMembers.length > 0) {
+        const members: Record<string, Member> = {};
+        for (const row of dbMembers) {
+          members[row.id] = {
+            id: row.id,
+            groupId: row.group_id,
+            username: row.username,
+            role: row.role as any,
+            joinedAt: row.joined_at,
+            synced: true
+          };
+        }
+        db.members = members;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(members).length} members from Supabase.`);
+      }
+    }
+
+    // 6. Restore Tasks if empty
+    const hasTasks = Object.keys(db.tasks).length > 0;
+    if (!hasTasks) {
+      console.log('Local tasks DB is empty. Attempting to restore tasks from Supabase...');
+      const { data: dbTasks, error: tasksErr } = await supabase
+        .from('tasks')
+        .select('*');
+
+      if (tasksErr) {
+        console.error('Failed to retrieve tasks from Supabase:', tasksErr);
+      } else if (dbTasks && dbTasks.length > 0) {
+        const tasks: Record<string, Task> = {};
+        for (const row of dbTasks) {
+          tasks[row.id] = {
+            id: row.id,
+            groupId: row.group_id,
+            title: row.title,
+            description: row.description,
+            priority: row.priority as any,
+            status: row.status as any,
+            dueDate: row.due_date,
+            createdBy: row.created_by,
+            tags: row.tags || [],
+            attachments: row.attachments || [],
+            repeatOption: row.repeat_option as any,
+            checklist: row.checklist || [],
+            progress: row.progress || 0,
+            createdAt: row.created_at,
+            synced: true
+          };
+        }
+        db.tasks = tasks;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(tasks).length} tasks from Supabase.`);
+      }
+    }
+
+    // 7. Restore Task Assignments if empty
+    const hasTaskAssignments = Object.keys(db.taskAssignments).length > 0;
+    if (!hasTaskAssignments) {
+      console.log('Local task assignments DB is empty. Attempting to restore from Supabase...');
+      const { data: dbAssign, error: assignErr } = await supabase
+        .from('task_assignments')
+        .select('*');
+
+      if (assignErr) {
+        console.error('Failed to retrieve task assignments from Supabase:', assignErr);
+      } else if (dbAssign && dbAssign.length > 0) {
+        const assign: Record<string, TaskAssignment> = {};
+        for (const row of dbAssign) {
+          assign[row.id] = {
+            id: row.id,
+            taskId: row.task_id,
+            username: row.username,
+            synced: true
+          };
+        }
+        db.taskAssignments = assign;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(assign).length} task assignments from Supabase.`);
+      }
+    }
+
+    // 8. Restore Goals if empty
+    const hasGoals = Object.keys(db.goals).length > 0;
+    if (!hasGoals) {
+      console.log('Local goals DB is empty. Attempting to restore goals from Supabase...');
+      const { data: dbGoals, error: goalsErr } = await supabase
+        .from('goals')
+        .select('*');
+
+      if (goalsErr) {
+        console.error('Failed to retrieve goals from Supabase:', goalsErr);
+      } else if (dbGoals && dbGoals.length > 0) {
+        const goals: Record<string, Goal> = {};
+        for (const row of dbGoals) {
+          goals[row.id] = {
+            id: row.id,
+            groupId: row.group_id,
+            title: row.title,
+            description: row.description,
+            deadline: row.deadline,
+            milestones: row.milestones || [],
+            progress: Number(row.progress || 0),
+            completionPercent: Number(row.completion_percent || 0),
+            createdAt: row.created_at,
+            synced: true
+          };
+        }
+        db.goals = goals;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(goals).length} goals from Supabase.`);
+      }
+    }
+
+    // 9. Restore Goal Members if empty
+    const hasGoalMembers = Object.keys(db.goalMembers).length > 0;
+    if (!hasGoalMembers) {
+      console.log('Local goal members DB is empty. Attempting to restore from Supabase...');
+      const { data: dbGoalMembers, error: goalMembersErr } = await supabase
+        .from('goal_members')
+        .select('*');
+
+      if (goalMembersErr) {
+        console.error('Failed to retrieve goal members from Supabase:', goalMembersErr);
+      } else if (dbGoalMembers && dbGoalMembers.length > 0) {
+        const goalMembers: Record<string, GoalMember> = {};
+        for (const row of dbGoalMembers) {
+          goalMembers[row.id] = {
+            id: row.id,
+            goalId: row.goal_id,
+            username: row.username,
+            synced: true
+          };
+        }
+        db.goalMembers = goalMembers;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(goalMembers).length} goal members from Supabase.`);
+      }
+    }
+
+    // 10. Restore Reminders if empty
+    const hasReminders = Object.keys(db.reminders).length > 0;
+    if (!hasReminders) {
+      console.log('Local reminders DB is empty. Attempting to restore reminders from Supabase...');
+      const { data: dbReminders, error: remindersErr } = await supabase
+        .from('reminders')
+        .select('*');
+
+      if (remindersErr) {
+        console.error('Failed to retrieve reminders from Supabase:', remindersErr);
+      } else if (dbReminders && dbReminders.length > 0) {
+        const reminders: Record<string, Reminder> = {};
+        for (const row of dbReminders) {
+          reminders[row.id] = {
+            id: row.id,
+            userId: row.user_id,
+            type: row.type as any,
+            targetId: row.target_id || undefined,
+            title: row.title,
+            message: row.message || '',
+            recurrence: row.recurrence as any,
+            timing: row.timing || [],
+            triggerTimes: row.trigger_times || [],
+            lastTriggered: row.last_triggered || null,
+            createdAt: row.created_at,
+            synced: true
+          };
+        }
+        db.reminders = reminders;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(reminders).length} reminders from Supabase.`);
+      }
+    }
+
+    // 11. Restore Notifications if empty
+    const hasNotifications = Object.keys(db.notifications).length > 0;
+    if (!hasNotifications) {
+      console.log('Local notifications DB is empty. Attempting to restore from Supabase...');
+      const { data: dbNotif, error: notifErr } = await supabase
+        .from('notifications')
+        .select('*');
+
+      if (notifErr) {
+        console.error('Failed to retrieve notifications from Supabase:', notifErr);
+      } else if (dbNotif && dbNotif.length > 0) {
+        const notifications: Record<string, Notification> = {};
+        for (const row of dbNotif) {
+          notifications[row.id] = {
+            id: row.id,
+            username: row.username,
+            type: row.type as any,
+            title: row.title,
+            description: row.description || '',
+            read: row.read || false,
+            createdAt: row.created_at,
+            category: row.category || 'general',
+            priority: row.priority as any,
+            metadata: row.metadata || {},
+            synced: true
+          };
+        }
+        db.notifications = notifications;
+        modified = true;
+        console.log(`Successfully restored ${Object.keys(notifications).length} notifications from Supabase.`);
+      }
+    }
+
     if (modified) {
       writeLocalDb(db);
     }

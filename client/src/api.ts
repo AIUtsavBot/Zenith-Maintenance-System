@@ -186,7 +186,7 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data)
     }),
-    verifyEmail: (data?: { otp: string }) => request('/users/profile/verify-email', { 
+    verifyEmail: (data?: { email?: string; otp?: string }) => request('/users/profile/verify-email', { 
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined
     })

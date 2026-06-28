@@ -197,17 +197,17 @@ export async function verifyEmail(req: AuthenticatedRequest, res: Response) {
     });
 
     const emailSent = await sendVerificationOtp(user.username, user.email, generatedOtp);
-    if (!emailSent) {
-      return res.status(500).json({ error: 'Failed to send verification email' });
-    }
 
     const payload: any = {
       status: 'pending',
       message: 'A verification code (OTP) has been sent to your email.'
     };
 
-    if (!isSmtpConfigured()) {
+    if (!emailSent || !isSmtpConfigured()) {
       payload.otp = generatedOtp;
+      if (!emailSent && isSmtpConfigured()) {
+        payload.warning = 'SMTP host was unreachable or authentication failed. Check credentials.';
+      }
     }
 
     return res.json(payload);

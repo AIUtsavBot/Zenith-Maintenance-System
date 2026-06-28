@@ -58,6 +58,7 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpSuccess, setOtpSuccess] = useState('');
   const [fallbackOtp, setFallbackOtp] = useState('');
+  const [otpWarning, setOtpWarning] = useState('');
   const [prefs, setPrefs] = useState({
     receiveReminderEmails: true,
     receiveTaskEmails: true,
@@ -139,6 +140,9 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
       if (res && res.status === 'pending') {
         if (res.otp) {
           setFallbackOtp(res.otp);
+        }
+        if (res.warning) {
+          setOtpWarning(res.warning);
         }
         setShowOtpModal(true);
       } else {
@@ -914,16 +918,24 @@ export const Settings: React.FC<SettingsProps> = ({ theme, setTheme, role }) => 
 
             {fallbackOtp && (
               <div style={{
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                background: otpWarning ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                border: `1px solid ${otpWarning ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
                 padding: '0.75rem',
                 borderRadius: '8px',
                 fontSize: '0.8rem',
-                color: '#93c5fd',
+                color: otpWarning ? '#fca5a5' : '#93c5fd',
                 textAlign: 'center',
                 lineHeight: 1.4
               }}>
-                ℹ️ SMTP is not configured. Use the testing code: <strong>{fallbackOtp}</strong>
+                {otpWarning ? (
+                  <>
+                    ⚠️ <strong>SMTP Error:</strong> {otpWarning}
+                    <br />
+                    Use testing code: <strong>{fallbackOtp}</strong>
+                  </>
+                ) : (
+                  <>ℹ️ SMTP is not configured. Use testing code: <strong>{fallbackOtp}</strong></>
+                )}
               </div>
             )}
 

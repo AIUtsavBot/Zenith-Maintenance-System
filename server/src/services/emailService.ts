@@ -2,7 +2,9 @@ import nodemailer from 'nodemailer';
 import { getEmailPreferences, getUser } from '../config/db.js';
 
 export function isSmtpConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const hasSmtp = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const hasResend = !!process.env.RESEND_API_KEY;
+  return hasSmtp || hasResend;
 }
 
 // Setup email transporter. Uses SMTP settings from env if available, otherwise falls back to console logging.
@@ -64,6 +66,46 @@ function isUserInQuietHours(start: string, end: string, timezone: string = 'UTC'
   }
 }
 
+async function dispatchEmail(options: { to: string; subject: string; html: string; text: string }): Promise<{ messageId: string }> {
+  const resendKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.SMTP_FROM || '"Zenith Focus" <noreply@zenithfocus.app>';
+
+  if (resendKey) {
+    const fromVal = process.env.RESEND_FROM || 'onboarding@resend.dev';
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: fromVal,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Resend API error: ${response.status} - ${errText}`);
+    }
+
+    const data: any = await response.json();
+    return { messageId: data.id || 'resend-success-id' };
+  }
+
+  const info = await transporter.sendMail({
+    from: fromAddress,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text
+  });
+  return { messageId: info.messageId || 'smtp-success-id' };
+}
+
 interface EmailOptions {
   toUsername: string;
   subject: string;
@@ -123,8 +165,7 @@ export async function sendEmail({ toUsername, subject, category, html, text }: E
       return false;
     }
 
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"Zenith Focus" <noreply@zenithfocus.app>',
+    const info = await dispatchEmail({
       to: user.email,
       subject,
       html,
@@ -233,8 +274,7 @@ export function getEmailTemplate(title: string, bodyContent: string): string {
 
 export async function sendVerificationOtp(username: string, email: string, otp: string): Promise<boolean> {
   try {
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"Zenith Focus" <noreply@zenithfocus.app>',
+    const info = await dispatchEmail({
       to: email,
       subject: 'Verify your Zenith Focus email address',
       html: getEmailTemplate(
